@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "I'm on branch feature/auth-jwt. I've committed the JWT authentication implementation. Run /gitf.",
-      "expected_output": "Pushes feature/auth-jwt, creates PR targeting develop, merges it with merge commit, checks out develop, pulls latest. Reports which branch was merged and that develop is now up to date.",
+      "expected_output": "Pushes feature/auth-jwt, creates PR targeting develop, checks mergeStateStatus, merges with merge commit, checks out develop, pulls latest. Reports which branch was merged and that develop is now up to date.",
       "files": []
     },
     {
@@ -16,7 +16,19 @@
     {
       "id": 3,
       "prompt": "I'm on develop. The branch is clean (no uncommitted changes). develop has 5 commits that aren't in main yet — a new search feature and a couple of bug fixes. The current version is 1.3.2. Run /gitf.",
-      "expected_output": "Detects develop is ahead of main. Determines version bump (minor, because there's a new feature) → new version is 1.4.0. Creates release/v1.4.0 from develop. Bumps version in the version file. PRs release to main, merges it. Tags v1.4.0 on main. PRs release to develop (back-merge), merges it. Deletes release branch local and remote. Pulls main and develop. Reports the full release summary.",
+      "expected_output": "Detects develop is ahead of main. Determines version bump (minor, because there's a new feature) → new version is 1.4.0. Creates release/v1.4.0 from develop. Bumps version in the version file. Checks mergeStateStatus before merging. PRs release to main, merges it. Tags v1.4.0 on main. PRs release to develop (back-merge), merges it. Deletes release branch local and remote. Pulls main and develop. Reports the full release summary.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I'm on feature/payment-stripe. I just ran /gitf and it created PR #7 to develop, but the repo requires a reviewer before merge. Now .git/gitf-state.json exists with flow=A, step=awaiting_merge, pr_number=7. I've asked a teammate to review, they approved, and the PR was merged on GitHub. I run /gitf again.",
+      "expected_output": "Detects .git/gitf-state.json exists. Reads state: flow=A, awaiting PR #7. Checks PR #7 status — state=MERGED. Pulls develop locally. Deletes .git/gitf-state.json. Reports that the flow is complete and develop is up to date.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I'm on develop. There are 3 commits ahead of main (all bug fixes, version is 2.1.0). I run /gitf. It creates release/v2.1.1, bumps version, and creates PR #9 to main. But the repo has required status checks — CI is still running. Now .git/gitf-state.json exists with flow=B, step=awaiting_merge_to_main, pr_number=9, version=2.1.1. CI has now passed and PR #9 was merged by a teammate. I run /gitf again.",
+      "expected_output": "Detects .git/gitf-state.json. Reads state: flow=B, awaiting PR #9 merge to main. Checks PR #9 — state=MERGED. Pulls main, creates annotated tag v2.1.1, pushes tag. Creates back-merge PR (release/v2.1.1 → develop), checks mergeStateStatus. If CLEAN: merges, pulls develop, deletes release branch locally, deletes .git/gitf-state.json, reports full release summary.",
       "files": []
     }
   ]

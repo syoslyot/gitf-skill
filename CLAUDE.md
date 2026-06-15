@@ -25,10 +25,10 @@ To test changes, use `/skill-creator` in Claude Code — it reads `evals/evals.j
 
 ## Git Flow for this repo
 
-Standard Git Flow with PR-based merges:
+Branch rules:
 - `main` — stable only
 - `develop` — integration branch
 - `feature/*` / `fix/*` — branch from develop, PR back to develop
 - No direct commits to `main` or `develop`
 
-Use `/gitf` within this repo to execute the workflow.
+**DO NOT execute any Git Flow operations (push, PR, merge, tag, branch) on your own.** Wait until the user explicitly types `/gitf` or `/gitf -v`. Until then, only read and edit files.

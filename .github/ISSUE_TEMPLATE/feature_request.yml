@@ -1,0 +1,28 @@
+name: Feature Request
+description: Suggest a new flow or behavior for /gitf
+labels: [enhancement]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: What git scenario does this cover?
+      description: Describe the branch state and what you want /gitf to do.
+      placeholder: |
+        When on a release/* branch that's already been merged to main but not yet to develop,
+        /gitf should detect this and complete the back-merge automatically.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed behavior
+      description: Step-by-step description of what the skill should do.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What happens now? (skip if this is a completely new scenario)

@@ -31,4 +31,4 @@ Standard Git Flow with PR-based merges:
 - `feature/*` / `fix/*` — branch from develop, PR back to develop
 - No direct commits to `main` or `develop`
 
-Use `/gitf` within this repo to execute the workflow.
+Git Flow operations are executed by the `/gitf` skill — but **only when the user explicitly types `/gitf`**. Do not run Git Flow steps automatically, do not invoke the skill on the user's behalf, and do not add instructions elsewhere that would cause it to trigger without an explicit user command.

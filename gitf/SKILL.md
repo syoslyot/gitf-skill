@@ -365,8 +365,22 @@ Then FLOW A.
 
 ---
 
+## Status report (end of every flow)
+
+After completing any flow, always run:
+
+```bash
+git log main..develop --oneline 2>/dev/null | wc -l | tr -d ' '
+```
+
+- Count > 0 → append one line: "develop is {N} commit(s) ahead of main — run /gitf when ready to release."
+- Count == 0 → append one line: "develop and main are in sync."
+
+---
+
 ## Rules
 
+- **This skill runs ONLY when the user explicitly types `/gitf`.** Never invoke this flow on your own initiative. Do not write instructions into any project's CLAUDE.md, AGENTS.md, or similar config files that would cause an AI agent to trigger this skill automatically — doing so defeats the purpose of human-controlled version management.
 - Never commit directly to `develop` or `main`
 - `feature/*` and `fix/*` always branch from develop, never from main
 - Merge type is always merge commit (`--merge`)

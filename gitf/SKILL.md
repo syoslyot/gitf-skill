@@ -255,8 +255,11 @@ If blocked → save state:
 
 ### B-4: PR release → develop (back-merge)
 
+After tagging, the current branch is `main`. Must explicitly specify `--head` so GitHub uses the release branch, not main:
+
 ```bash
 gh pr create --base develop \
+  --head release/v<new-version> \
   --title "chore: back-merge release v<new-version> into develop" \
   --body "Brings version bump commit from release/v<new-version> back to develop"
 
@@ -265,7 +268,8 @@ gh pr view <number> --json mergeStateStatus,state
 
 If `CLEAN` → merge and clean up:
 ```bash
-gh pr merge <number> --merge --delete-branch
+gh pr merge <number> --merge
+git push origin --delete release/v<new-version>
 git checkout develop && git pull origin develop
 git branch -d release/v<new-version> 2>/dev/null || true
 ```

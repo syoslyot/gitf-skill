@@ -1,25 +1,119 @@
 ---
 name: gitf
-description: Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf, wants to push a feature or fix branch to develop, wants to release to main, or needs help completing a Git Flow step. Detects current branch state and executes the appropriate flow end-to-end: feature/fix PR to develop, or full release to main with version bump and tagging. Fully automatic — creates PRs, merges them, pulls, tags, cleans up, all without waiting for confirmation.
+description: Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf, wants to push a feature or fix branch to develop, wants to release to main, or needs help completing a Git Flow step. Detects current branch state and executes the appropriate flow end-to-end: feature/fix PR to develop, or full release to main with version bump and tagging. Fully automatic — creates PRs, merges them, pulls, tags, cleans up, all without waiting for confirmation. If branch protection blocks auto-merge, saves state and resumes on next /gitf call.
 ---
 
 # /gitf — Personal Git Flow Automation
 
 Fully automatic Git Flow execution. Detect state → decide path → execute end-to-end without pausing.
 
-## Step 0: Detect State
+---
 
-Run these in parallel to understand the current situation:
+## Step 0: Check for saved state (ALWAYS run this first)
+
+Before anything else:
 
 ```bash
-git branch --show-current          # current branch name
-git status --short                  # uncommitted changes
-git log develop..HEAD --oneline    # commits on current branch not yet in develop
-git log main..develop --oneline    # commits in develop not yet in main
+cat .git/gitf-state.json 2>/dev/null
 ```
 
-Also check which remote tracking exists:
+If the file exists → go to **FLOW RESUME** immediately. Skip all other detection.
+
+If the file does not exist → proceed to **Step 1**.
+
+---
+
+## State file format
+
+Saved at `.git/gitf-state.json` whenever a PR cannot be auto-merged. Deleted when the full flow completes.
+
+```json
+{
+  "flow": "A",
+  "step": "awaiting_merge",
+  "pr_number": 3,
+  "source_branch": "feature/auth-jwt",
+  "target_branch": "develop",
+  "version": null,
+  "release_branch": null,
+  "main_pr_merged": false,
+  "develop_pr_number": null
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `flow` | A / B / C |
+| `step` | `awaiting_merge` / `awaiting_merge_to_main` / `awaiting_merge_to_develop` |
+| `pr_number` | The PR currently waiting |
+| `source_branch` | Branch that was PR'd |
+| `target_branch` | Base branch of the waiting PR |
+| `version` | (Flow B/C only) version being released |
+| `release_branch` | (Flow B/C only) e.g. `release/v1.2.0` |
+| `main_pr_merged` | (Flow B only) whether release→main is done |
+| `develop_pr_number` | (Flow B only) PR number for back-merge, once created |
+
+---
+
+## FLOW RESUME
+
+Read `.git/gitf-state.json`, then check the waiting PR:
+
 ```bash
+gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
+```
+
+Evaluate the result:
+
+| `state` | `mergeStateStatus` | Action |
+|---------|-------------------|--------|
+| `MERGED` | — | PR is done → proceed to next step (see below) |
+| `OPEN` | `BLOCKED` | Tell user: "PR #N is still waiting for review. Merge it on GitHub, then run /gitf again." |
+| `OPEN` | `UNSTABLE` | Tell user: "CI failed on PR #N. Fix the failing checks, then run /gitf again." |
+| `OPEN` | `UNKNOWN` or checks pending | Tell user: "CI is still running on PR #N. Wait for it to finish, then run /gitf again." |
+| `CLOSED` (not merged) | — | Tell user: "PR #N was closed without merging. Run /gitf again to start fresh." → delete state file |
+
+### What "next step" means per flow and step:
+
+**Flow A — `awaiting_merge`** (feature/fix → develop):
+- PR merged → `git checkout develop && git pull origin develop`
+- Delete `.git/gitf-state.json`
+- Report: done
+
+**Flow B — `awaiting_merge_to_main`** (release → main):
+- PR merged → tag main:
+  ```bash
+  git checkout main && git pull origin main
+  git tag -a v<version> -m "v<version>"
+  git push origin v<version>
+  ```
+- Create back-merge PR (release → develop), attempt auto-merge
+- If auto-merge succeeds → cleanup, delete state
+- If blocked → update state: `step=awaiting_merge_to_develop`, save `develop_pr_number`
+
+**Flow B — `awaiting_merge_to_develop`** (back-merge → develop):
+- PR merged → cleanup:
+  ```bash
+  git checkout develop && git pull origin develop
+  git branch -d <release_branch> 2>/dev/null || true
+  ```
+- Delete `.git/gitf-state.json`
+- Report: full release summary
+
+**Flow C — `awaiting_merge`** (hotfix → main or → develop):
+- Same pattern as Flow B, using `target_branch` from state to know which step
+
+---
+
+## Step 1: Detect current state
+
+Run in parallel:
+
+```bash
+git branch --show-current
+git status --short
+git log develop..HEAD --oneline
+git log main..develop --oneline
 git remote -v
 ```
 
@@ -30,99 +124,101 @@ git remote -v
 ```
 /gitf triggered
 │
+├── .git/gitf-state.json exists? → FLOW RESUME (above)
+│
 ├── On feature/* or fix/*
-│   └── → FLOW A: Merge to Develop
+│   └── → FLOW A
 │
 ├── On hotfix/*
-│   └── → FLOW C: Hotfix
+│   └── → FLOW C
 │
 ├── On release/*
-│   └── → FLOW B (continue): Complete in-progress release
+│   └── → FLOW B (resume in-progress release without state file)
 │
 ├── On develop
-│   ├── Has uncommitted changes OR has commits not in develop (AI forgot to branch)
-│   │   └── → FLOW D: Rescue — create branch, move commits, then FLOW A
-│   ├── develop is ahead of main (git log main..develop shows commits)
-│   │   └── → FLOW B: Full Release to Main
-│   └── develop == main (nothing to release)
-│       └── → Tell user: "develop and main are in sync, nothing to release"
+│   ├── uncommitted changes → FLOW D, Case 1
+│   ├── commits ahead of origin/develop → FLOW D, Case 2
+│   ├── develop ahead of main → FLOW B
+│   └── develop == main → "develop and main are in sync, nothing to release"
 │
-└── On main
-    └── → Warn: "You're on main — should not be working here directly"
+└── On main → warn: "You're on main — should not be working here directly"
 ```
 
 ---
 
 ## FLOW A: Feature/Fix → Develop
 
-Goal: push current branch, open PR to develop, merge, pull develop.
-
 ```bash
-# 1. Push branch
+# 1. Push
 git push -u origin <current-branch>
 
-# 2. Create PR targeting develop
-gh pr create --base develop --title "<derive from branch name>" --body "<summarize commits>"
+# 2. Create PR
+gh pr create --base develop \
+  --title "<conventional commits title from branch/commits>" \
+  --body "<summarize commits>"
 
-# 3. Merge PR immediately (merge commit)
-gh pr merge <PR-number> --merge --delete-branch
-
-# 4. Sync local develop
-git checkout develop
-git pull origin develop
+# 3. Attempt auto-merge
+gh pr view <number> --json mergeStateStatus,state
 ```
 
-**PR title convention**: derive from branch name and commits. Examples:
+If `mergeStateStatus == CLEAN` → merge immediately:
+```bash
+gh pr merge <number> --merge --delete-branch
+git checkout develop && git pull origin develop
+```
+
+If blocked (BLOCKED / UNSTABLE / checks pending) → save state:
+```bash
+# Write .git/gitf-state.json
+{
+  "flow": "A",
+  "step": "awaiting_merge",
+  "pr_number": <number>,
+  "source_branch": "<current-branch>",
+  "target_branch": "develop",
+  "version": null,
+  "release_branch": null,
+  "main_pr_merged": false,
+  "develop_pr_number": null
+}
+```
+Tell user what's blocking and to run `/gitf` after it's resolved.
+
+**PR title convention**: derive from branch name and commits.
 - `feature/auth-jwt` → `feat(auth): implement JWT authentication`
 - `fix/map-markers` → `fix(map): correct marker positioning`
-
-**After merge**: confirm to user with one line — which branch was merged and that develop is now up to date.
 
 ---
 
 ## FLOW B: Full Release to Main
 
-Goal: branch release, bump version, PR to main, tag, PR to develop, clean up.
+### B-1: Detect version file
 
-### B-1: Detect version and determine next version
+Check in order:
+1. `package.json` — if `.ts/.js/.tsx/.jsx` files exist
+2. `pyproject.toml` — if `.py` is the main language
+3. `Cargo.toml` — if `.rs` is the main language
+4. `VERSION` — fallback; create with `0.1.0` if none found
 
-First, find the version file by checking in order:
-1. `package.json` (if `.ts`, `.js`, `.tsx`, `.jsx` files exist in project root or `src/`)
-2. `pyproject.toml` (if `.py` files are the main language)
-3. `Cargo.toml` (if `.rs` files are the main language)
-4. `VERSION` (fallback, create if none of the above exist)
-
-Read current version, then determine bump type:
-- **patch** (x.y.**Z**): bug fixes only since last release
-- **minor** (x.**Y**.0): new features added since last release
-- **major** (**X**.0.0): breaking changes (rare, ask user to confirm)
-
-Look at `git log main..develop --oneline` to decide. If unsure between patch and minor, lean toward minor.
+Determine bump from `git log main..develop --oneline`:
+- Only `fix:` commits → patch
+- Any `feat:` commit → minor
+- `BREAKING CHANGE` in any commit body → major (ask user to confirm before proceeding)
 
 ### B-2: Create release branch and bump version
 
 ```bash
-git checkout develop
-git pull origin develop
+git checkout develop && git pull origin develop
 git checkout -b release/v<new-version>
-```
-
-Update the version file (only the version field, nothing else):
-- `package.json`: change `"version": "..."` field
-- `pyproject.toml`: change `version = "..."` field  
-- `Cargo.toml`: change `version = "..."` field
-- `VERSION`: overwrite file content with new version
-
-```bash
+# Edit version file (only the version field)
 git add <version-file>
 git commit -m "chore: bump version to v<new-version>"
 git push -u origin release/v<new-version>
 ```
 
-### B-3: PR release → main, merge, tag
+### B-3: PR release → main
 
 ```bash
-# Create PR to main
 gh pr create --base main \
   --title "release: v<new-version>" \
   --body "Release v<new-version>
@@ -130,36 +226,68 @@ gh pr create --base main \
 Changes since last release:
 $(git log main..HEAD --oneline --no-merges)"
 
-# Merge immediately (merge commit)
-gh pr merge <PR-number> --merge
+gh pr view <number> --json mergeStateStatus,state
+```
 
-# Switch to main, pull, tag
-git checkout main
-git pull origin main
+If `CLEAN` → merge, then tag:
+```bash
+gh pr merge <number> --merge
+git checkout main && git pull origin main
 git tag -a v<new-version> -m "v<new-version>"
 git push origin v<new-version>
 ```
+Then proceed to B-4.
 
-### B-4: PR release → develop (back-merge), merge, clean up
+If blocked → save state:
+```json
+{
+  "flow": "B",
+  "step": "awaiting_merge_to_main",
+  "pr_number": <number>,
+  "source_branch": "release/v<new-version>",
+  "target_branch": "main",
+  "version": "<new-version>",
+  "release_branch": "release/v<new-version>",
+  "main_pr_merged": false,
+  "develop_pr_number": null
+}
+```
+
+### B-4: PR release → develop (back-merge)
 
 ```bash
-# Create back-merge PR
 gh pr create --base develop \
   --title "chore: back-merge release v<new-version> into develop" \
   --body "Brings version bump commit from release/v<new-version> back to develop"
 
-# Merge immediately
-gh pr merge <PR-number> --merge --delete-branch
-
-# Sync local develop, clean up local release branch
-git checkout develop
-git pull origin develop
-git branch -d release/v<new-version>
+gh pr view <number> --json mergeStateStatus,state
 ```
 
-### B-5: Final confirmation
+If `CLEAN` → merge and clean up:
+```bash
+gh pr merge <number> --merge --delete-branch
+git checkout develop && git pull origin develop
+git branch -d release/v<new-version> 2>/dev/null || true
+```
+Delete `.git/gitf-state.json`. Report full release summary.
 
-Report to user:
+If blocked → update state:
+```json
+{
+  "flow": "B",
+  "step": "awaiting_merge_to_develop",
+  "pr_number": <develop-pr-number>,
+  "source_branch": "release/v<new-version>",
+  "target_branch": "develop",
+  "version": "<new-version>",
+  "release_branch": "release/v<new-version>",
+  "main_pr_merged": true,
+  "develop_pr_number": <number>
+}
+```
+
+### B-5: Final confirmation (after cleanup)
+
 ```
 ✓ Released v<new-version>
   • release/v<new-version> merged to main
@@ -173,24 +301,23 @@ Report to user:
 
 ## FLOW C: Hotfix
 
-Goal: critical production fix from main, merge to both main and develop.
-
 ```bash
-# Assumes user is already on hotfix/* branch with commits
 git push -u origin <hotfix-branch>
 
 # PR to main
 gh pr create --base main --title "hotfix: <description>" --body "..."
-gh pr merge <PR-number> --merge
+# Check mergeStateStatus, save state if blocked (same pattern as Flow A)
+gh pr merge <number> --merge
 
-# Tag on main
+# Tag
 git checkout main && git pull origin main
 git tag -a v<bumped-patch> -m "v<bumped-patch>"
 git push origin v<bumped-patch>
 
 # PR to develop
 gh pr create --base develop --title "hotfix: back-merge <description> to develop" --body "..."
-gh pr merge <PR-number> --merge --delete-branch
+# Check mergeStateStatus, save state if blocked
+gh pr merge <number> --merge --delete-branch
 
 git checkout develop && git pull origin develop
 git branch -d <hotfix-branch>
@@ -200,46 +327,33 @@ git branch -d <hotfix-branch>
 
 ## FLOW D: Rescue — AI Forgot to Branch
 
-Triggered when: on `develop` and there are commits that don't belong there, OR there are uncommitted changes.
-
-### Case 1: Uncommitted changes on develop
-
+**Case 1 — uncommitted changes on develop:**
 ```bash
-# Determine branch name from context (file names, nature of changes)
-# Name format: feature/<scope>-<desc> or fix/<scope>-<desc>
-git checkout -b <new-branch>
-# All uncommitted changes are now on the new branch
+git checkout -b <inferred-branch>
+# Changes carry over automatically
 ```
-Then execute **FLOW A**.
+Then FLOW A.
 
-### Case 2: Commits already on develop that shouldn't be there
-
+**Case 2 — rogue commits on develop:**
 ```bash
-# Find where develop diverged from origin/develop
-git log origin/develop..develop --oneline  # shows the rogue commits
-
-# Create new branch at current HEAD
-git checkout -b <new-branch>
-
-# Reset develop back to origin/develop
+git checkout -b <inferred-branch>   # at current HEAD
 git checkout develop
 git reset --hard origin/develop
-
-# Switch back to new branch (commits are preserved there)
-git checkout <new-branch>
+git checkout <inferred-branch>
 ```
-Then execute **FLOW A**.
+Then FLOW A.
 
-**Branch naming**: analyze the commit messages and changed files to infer a meaningful name. Format: `feature/<scope>-<kebab-desc>` or `fix/<scope>-<kebab-desc>`. Tell the user what branch was created and why that name was chosen.
+**Branch naming**: infer from commit messages and changed files. Format: `feature/<scope>-<kebab-desc>` or `fix/<scope>-<kebab-desc>`. Tell the user the chosen name and why.
 
 ---
 
 ## Rules
 
-- **Never commit directly to `develop` or `main`** — all changes go through branches and PRs
-- **feature/* and fix/* always branch from develop**, never from main
-- **Merge type is always merge commit** (`--merge` flag, not `--squash` or `--rebase`)
-- **Tag immediately after merge to main**, before the back-merge to develop
-- **Delete release/feature/fix branches** after both PRs merge (local and remote)
-- **All operations are automatic** — do not pause to ask for confirmation mid-flow
+- Never commit directly to `develop` or `main`
+- `feature/*` and `fix/*` always branch from develop, never from main
+- Merge type is always merge commit (`--merge`)
+- Tag immediately after merge to main, before back-merge to develop
+- Delete release/feature/fix branches after flow completes (local and remote)
+- Check `mergeStateStatus` before attempting `gh pr merge` — never blindly call merge and hope it works
+- Delete `.git/gitf-state.json` only when the entire flow is fully complete
 - If `gh` is not authenticated or a PR creation fails, stop and report the error clearly

@@ -9,6 +9,20 @@ Fully automatic Git Flow execution. Detect state → decide path → execute end
 
 ---
 
+## Step -1: Auto-update check (ALWAYS run this first, before everything else)
+
+Run the update script silently in the background. It checks GitHub once per hour at most — if checked recently, it exits immediately with no network call:
+
+```bash
+bash ~/.claude/skills/gitf/gitf-update.sh
+```
+
+If the script prints a line starting with `gitf updated:` (e.g. `gitf updated: 0.1.0 → 0.2.0`), tell the user in one line: "gitf skill updated to v0.2.0 — using new version." Then continue normally with the rest of the flow using the instructions currently loaded in context (the update takes effect next session).
+
+If the script prints nothing or fails: continue silently. Never block the flow for this.
+
+---
+
 ## Step 0: Check for saved state (ALWAYS run this first)
 
 Before anything else:

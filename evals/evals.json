@@ -1,0 +1,23 @@
+{
+  "skill_name": "gitf",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm on branch feature/auth-jwt. I've committed the JWT authentication implementation. Run /gitf.",
+      "expected_output": "Pushes feature/auth-jwt, creates PR targeting develop, merges it with merge commit, checks out develop, pulls latest. Reports which branch was merged and that develop is now up to date.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I'm on the develop branch. I've been committing directly to develop by mistake — there are 3 commits here that should be on a feature branch. The commits are about adding a dark mode toggle to the settings page. Run /gitf.",
+      "expected_output": "Detects rogue commits on develop. Creates a new branch named something like feature/settings-dark-mode based on commit messages. Moves the commits there using reset --hard on develop and checking out the new branch. Then proceeds with FLOW A: PR to develop, merge, pull.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I'm on develop. The branch is clean (no uncommitted changes). develop has 5 commits that aren't in main yet — a new search feature and a couple of bug fixes. The current version is 1.3.2. Run /gitf.",
+      "expected_output": "Detects develop is ahead of main. Determines version bump (minor, because there's a new feature) → new version is 1.4.0. Creates release/v1.4.0 from develop. Bumps version in the version file. PRs release to main, merges it. Tags v1.4.0 on main. PRs release to develop (back-merge), merges it. Deletes release branch local and remote. Pulls main and develop. Reports the full release summary.",
+      "files": []
+    }
+  ]
+}

@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO="syoslyot/git-flow-skill"
 INSTALL_DIR="$HOME/.claude/skills/gitf"
-CHECK_INTERVAL=3600  # seconds between checks (1 hour ≈ one session)
+CHECK_INTERVAL=604800  # seconds between checks (7 days)
 LAST_CHECK_FILE="/tmp/gitf-last-check"
 VERSION_URL="https://raw.githubusercontent.com/$REPO/main/gitf/.version"
 SKILL_URL="https://raw.githubusercontent.com/$REPO/main/gitf/SKILL.md"

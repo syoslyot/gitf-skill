@@ -21,9 +21,16 @@ Copy the `gitf/` directory to your Claude Code skills folder:
 
 ```bash
 cp -r gitf/ ~/.claude/skills/gitf/
+chmod +x ~/.claude/skills/gitf/gitf-update.sh
 ```
 
 Then use `/gitf` in any Claude Code session.
+
+## Updates
+
+Updates are automatic. The first time you use `/gitf` each hour, it silently checks GitHub for a newer version. If one exists, it downloads and installs it in the background — you'll see a one-line notice and the new version takes effect next session.
+
+No manual update steps needed.
 
 ## Git Flow reference
 

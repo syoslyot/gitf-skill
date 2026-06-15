@@ -1,0 +1,48 @@
+name: Bug Report
+description: Report incorrect behavior in a /gitf flow
+labels: [bug]
+body:
+  - type: dropdown
+    id: flow
+    attributes:
+      label: Affected Flow
+      options:
+        - "Flow A — feature/fix → develop"
+        - "Flow B — full release to main"
+        - "Flow C — hotfix"
+        - "Flow D — rescue (AI forgot to branch)"
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: branch-state
+    attributes:
+      label: Branch state when /gitf was triggered
+      description: Which branch were you on? Paste the output of `git branch --show-current`, `git status --short`, and `git log main..develop --oneline`.
+      placeholder: |
+        Branch: develop
+        git status: clean
+        develop ahead of main by: 3 commits
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: version-file
+    attributes:
+      label: Version file used (if Flow B)
+      description: Which file was detected? package.json / pyproject.toml / Cargo.toml / VERSION?

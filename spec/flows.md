@@ -12,19 +12,28 @@ Formal specification for each flow in `/gitf`. These define expected behavior fo
 
 ---
 
-## Precondition: State file check
+## Precondition: State lookup (cache hit / miss)
 
-Before every flow, check `.gitf/state.json`. If it exists, go to **FLOW RESUME**
-instead of running normal detection. State is written by the `github` provider
-for PR-merge pauses, and by **either** provider for the code-review pause
-(`step=awaiting_code_review`), which runs on the local branch before landing on
-`main`.
+Before every flow, look up the **current branch's** entry in the v2 branch-keyed
+map `.gitf/state.json` via `gitf-state.sh get <branch>`. If an entry exists and
+its `pause_sha` is still an ancestor of the current tip (`gitf-state.sh valid`),
+that is a **cache hit** → go to **FLOW RESUME**. Otherwise (no entry, or a reused
+branch name whose `pause_sha` no longer applies) it is a **cache miss** → run
+normal detection; the chosen flow runs idempotently and halts on ambiguity.
+
+Entries are written when a flow pauses — by the `github` provider's caller for
+PR-merge pauses, and by the code-review gate for the code-review pause
+(`step=awaiting_code_review`, **either** provider, since the review runs on the
+local branch before landing on `main`). A v1 (non-`flows`) file is treated as
+empty, so it is always a cache miss — that is the migration path.
 
 ---
 
 ## FLOW RESUME
 
-Read state file. Check waiting PR:
+Read the current branch's entry (`gitf-state.sh get <branch>`). For a code-review
+pause (`step=awaiting_code_review`) there is no PR — re-run the gate (see below).
+Otherwise check the waiting PR:
 
 ```bash
 gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
@@ -36,17 +45,17 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 | `OPEN` | `BLOCKED` | Report: waiting for review |
 | `OPEN` | `UNSTABLE` | Report: CI failed |
 | `OPEN` | `UNKNOWN` / pending | Report: CI still running |
-| `CLOSED` (not merged) | — | Report: PR closed without merge → delete state file |
+| `CLOSED` (not merged) | — | Report: PR closed without merge → drop the branch's entry |
 
 ### Next steps by flow and step
 
 | Flow | Step | Next action after PR merged |
 |------|------|-----------------------------|
-| A | `awaiting_merge` | pull develop → delete state |
-| B | `awaiting_merge_to_main` | tag main → create back-merge PR → attempt merge or save state |
-| B | `awaiting_merge_to_develop` | pull develop → cleanup release branch → delete state → report |
-| C | `awaiting_merge` (to main) | tag main → create back-merge PR → attempt merge or save state |
-| C | `awaiting_merge` (to develop) | pull develop → cleanup → delete state |
+| A | `awaiting_merge` | pull develop → drop entry |
+| B | `awaiting_merge_to_main` | tag main → create back-merge PR → attempt merge or update entry |
+| B | `awaiting_merge_to_develop` | pull develop → cleanup release branch → drop entry → report |
+| C | `awaiting_merge` (to main) | tag main → create back-merge PR → attempt merge or update entry |
+| C | `awaiting_merge` (to develop) | pull develop → cleanup → drop entry |
 
 For `step=awaiting_code_review` there is no PR. Re-run the code-review gate on
 the release/hotfix branch; if it passes, resume the flow at the land-to-main
@@ -181,14 +190,19 @@ Then Flow A.
 
 ---
 
-## State file lifecycle
+## State entry lifecycle
+
+Each entry is keyed by its owning branch and carries `pause_sha` (the branch tip
+at pause time). All access is via `gitf-state.sh`.
 
 ```
 Created → when a PR is created but mergeStateStatus != CLEAN
         → when the code-review gate stops with unresolved findings (awaiting_code_review)
 Updated → when moving between steps within Flow B (main_pr_merged, develop_pr_number)
-Deleted → when the entire flow completes successfully
-         → when a PR is found CLOSED without merge (reset for fresh start)
+Deleted → when the entry's flow completes successfully
+         → when its branch is cleaned up (CLEANUP drops the entry)
+         → when its PR is found CLOSED without merge (reset for fresh start)
 ```
 
-State file is never deleted mid-flow unless the PR was abandoned.
+An entry is never deleted mid-flow unless its PR was abandoned. On cache miss the
+flow rebuilds progress idempotently rather than relying on a stored entry.

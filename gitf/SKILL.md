@@ -1,6 +1,6 @@
 ---
 name: gitf
-description: Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and current branch state, then executes the appropriate flow end-to-end: feature/fix to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. On GitHub it uses PRs and, if branch protection blocks auto-merge, saves state to .git/gitf-state.json and resumes on the next /gitf call. With no remote or no gh it falls back to local merges.
+description: Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and current branch state, then executes the appropriate flow end-to-end: feature/fix to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. On GitHub it uses PRs and, if branch protection blocks auto-merge, saves state to .gitf/state.json and resumes on the next /gitf call. With no remote or no gh it falls back to local merges.
 ---
 
 # /gitf — Personal Git Flow Automation
@@ -64,7 +64,7 @@ Flag: `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`.
 State (github provider only — local never writes state):
 
 ```bash
-cat .git/gitf-state.json 2>/dev/null
+cat .gitf/state.json 2>/dev/null
 ```
 
 If the file exists → load `flows/resume.md` and `providers/github.md`, then
@@ -88,7 +88,7 @@ git log main..develop --oneline
 ## Decision Tree → which flow to load
 
 ```
-.git/gitf-state.json exists?      → flows/resume.md        (github only)
+.gitf/state.json exists?      → flows/resume.md        (github only)
 
 On feature/* or fix/*             → flows/flow-a.md
 On hotfix/*                       → flows/flow-c.md
@@ -128,7 +128,7 @@ blockable PR; local = synchronous `--no-ff` merge).
 
 ## State file schema (github provider only)
 
-Saved at `.git/gitf-state.json` when a PR cannot be auto-merged; deleted when
+Saved at `.gitf/state.json` when a PR cannot be auto-merged; deleted when
 the full flow completes (or a PR was closed without merge).
 
 ```json
@@ -175,6 +175,6 @@ the full flow completes (or a PR was closed without merge).
   current branch may be `main`).
 - Delete release/feature/fix branches after the flow completes (local + remote).
 - github provider: check `mergeStateStatus` before `gh pr merge` — never merge
-  blindly. Delete `.git/gitf-state.json` only when the flow is fully complete.
+  blindly. Delete `.gitf/state.json` only when the flow is fully complete.
 - If `gh` errors or a PR creation fails, stop and report clearly.
 - Re-run detection every invocation — never assume a cached platform.

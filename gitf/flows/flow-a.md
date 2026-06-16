@@ -13,7 +13,7 @@ Conventional Commits form.
 - `fix/map-markers` → `fix(map): correct marker positioning`
 
 **github provider**: if `LAND` reports the PR blocked, it has already saved
-`.git/gitf-state.json` (`flow=A, step=awaiting_merge`) and emitted a `blocked-*`
+`.gitf/state.json` (`flow=A, step=awaiting_merge`) and emitted a `blocked-*`
 message. Stop there; the next `/gitf` resumes via `resume.md`.
 
 **local provider**: `LAND` is a synchronous `--no-ff` merge into develop, then

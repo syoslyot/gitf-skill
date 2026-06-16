@@ -117,32 +117,35 @@ check "no-remote: needs_login false" "$J" needs_login false
 # Config override
 # ============================================================
 
+# gitf_config <repo> <content> — write .gitf/config (project-root, not .git/)
+gitf_config() { mkdir -p "$1/.gitf" && printf '%s' "$2" > "$1/.gitf/config"; }
+
 # 5. platform:local forces local even with gh+login
-R="$(new_repo)"; echo '{"platform":"local"}' > "$R/.git/gitf-config.json"
+R="$(new_repo)"; gitf_config "$R" '{"platform":"local"}'
 J="$(run_detect "$R" true true)"
 check "override-local: provider"      "$J" provider local
 check "override-local: platform_config" "$J" platform_config local
 check "override-local: needs_login false" "$J" needs_login false
 
 # 6. platform:github with gh not logged in -> github + needs_login
-R="$(new_repo)"; echo '{"platform":"github"}' > "$R/.git/gitf-config.json"
+R="$(new_repo)"; gitf_config "$R" '{"platform":"github"}'
 J="$(run_detect "$R" true false)"
 check "override-github: provider"      "$J" provider github
 check "override-github: needs_login"   "$J" needs_login true
 
 # 7. malformed config -> falls back to auto
-R="$(new_repo)"; echo 'not json at all' > "$R/.git/gitf-config.json"
+R="$(new_repo)"; gitf_config "$R" 'not json at all'
 J="$(run_detect "$R" true true)"
 check "malformed-config: provider github" "$J" provider github
 check "malformed-config: platform_config auto" "$J" platform_config auto
 
 # 8. CRLF + whitespace config still parses
-R="$(new_repo)"; printf '  {\r\n  "platform" : "local"\r\n}\r\n' > "$R/.git/gitf-config.json"
+R="$(new_repo)"; gitf_config "$R" "$(printf '  {\r\n  "platform" : "local"\r\n}\r\n')"
 J="$(run_detect "$R" true true)"
 check "crlf-config: provider local" "$J" provider local
 
 # 9. reserved/unknown platform value -> ignored, auto
-R="$(new_repo)"; echo '{"platform":"gitlab"}' > "$R/.git/gitf-config.json"
+R="$(new_repo)"; gitf_config "$R" '{"platform":"gitlab"}'
 J="$(run_detect "$R" true true)"
 check "unknown-platform: platform_config auto" "$J" platform_config auto
 check "unknown-platform: provider github" "$J" provider github
@@ -170,7 +173,7 @@ J2="$(run_detect "$R" true true)"; check "midsession c: github after remote add"
 # 13. config flipped to local mid-session
 R="$(new_repo)"
 J1="$(run_detect "$R" true true)"; check "midsession d: github before override" "$J1" provider github
-echo '{"platform":"local"}' > "$R/.git/gitf-config.json"
+gitf_config "$R" '{"platform":"local"}'
 J2="$(run_detect "$R" true true)"; check "midsession d: local after override" "$J2" provider local
 
 # ============================================================

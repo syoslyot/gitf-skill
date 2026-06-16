@@ -35,7 +35,7 @@ Providers read these fields from the detector JSON:
 
 ## State and resume
 
-Only a provider that can **block** (await review / CI) needs `.git/gitf-state.json`
+Only a provider that can **block** (await review / CI) needs `.gitf/state.json`
 and a resume path. Today that is `github` only. `local` lands synchronously and
 **never** writes state.
 
@@ -48,4 +48,4 @@ and a resume path. Today that is `github` only. `local` lands synchronously and
 
 GitLab/Bitbucket native MR/PR are intentionally **not** implemented — the
 structure is reserved here, not built. Non-GitHub remotes fall back to `local`
-(set `.git/gitf-config.json` `{"platform":"local"}`).
+(set `.gitf/config` `{"platform":"local"}`).

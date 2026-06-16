@@ -1,10 +1,10 @@
 # Provider: local
 
 Active when `gitf-detect.sh` reports `"provider":"local"` — no remote, or `gh`
-unavailable, or `.git/gitf-config.json` forces `local`.
+unavailable, or `.gitf/config` forces `local`.
 
 There is **no PR, no review/CI gate, no blocking**. Landing is a synchronous
-`--no-ff` merge. This provider **never** writes `.git/gitf-state.json` and has
+`--no-ff` merge. This provider **never** writes `.gitf/state.json` and has
 no resume path.
 
 Behavior of `PUBLISH`/`SYNC`/remote cleanup depends on `has_remote`:

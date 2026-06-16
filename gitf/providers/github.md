@@ -5,7 +5,7 @@ logged in). All merges are **merge commits** (`--merge`). `gh` routes to the
 correct host on its own — GitHub Enterprise works with no special handling.
 
 This is the only provider that can block. When a PR cannot be auto-merged it
-saves `.git/gitf-state.json` and the flow resumes later via `resume.md`.
+saves `.gitf/state.json` and the flow resumes later via `resume.md`.
 
 ---
 
@@ -43,7 +43,7 @@ gh pr merge <number> --merge
 `keep-branch` is passed by flows that still need `head` after this LAND
 (e.g. a release branch that must also back-merge into develop).
 
-When blocked, save `.git/gitf-state.json` per the schema in `SKILL.md`, then
+When blocked, save `.gitf/state.json` per the schema in `SKILL.md`, then
 emit the matching `blocked-*` status message and stop.
 
 ## PUBLISH branch

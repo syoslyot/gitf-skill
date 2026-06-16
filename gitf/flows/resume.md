@@ -1,6 +1,6 @@
 # Flow Resume (github provider only)
 
-Reached when `.git/gitf-state.json` exists. Only the `github` provider ever
+Reached when `.gitf/state.json` exists. Only the `github` provider ever
 writes state, so resume is github-only; `local` never lands here.
 
 Read the state file, then check the waiting PR:
@@ -27,5 +27,5 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 | C | `awaiting_merge` (target=main) | `TAG <patch-version>` → `LAND hotfix→develop` → merge or save state |
 | C | `awaiting_merge` (target=develop) | `CLEANUP <hotfix-branch>` → `SYNC develop` → delete state → **flow-c-done** |
 
-Delete `.git/gitf-state.json` only when the entire flow is complete, or when a
+Delete `.gitf/state.json` only when the entire flow is complete, or when a
 PR was found `CLOSED` without merge (reset for a fresh start).

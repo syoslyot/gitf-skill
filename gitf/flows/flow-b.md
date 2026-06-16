@@ -72,7 +72,7 @@ never after B-6.
 
 ### B-7: Cleanup
 
-`CLEANUP <release-branch>` → `SYNC develop` → delete `.git/gitf-state.json`
+`CLEANUP <release-branch>` → `SYNC develop` → delete `.gitf/state.json`
 (github) → **status-messages: flow-b-done**.
 
 **Tag ordering invariant**: always between B-4 (main has the commit) and B-6.

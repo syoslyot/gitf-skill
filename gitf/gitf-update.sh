@@ -65,10 +65,7 @@ mkdir -p "$INSTALL_DIR"
 # Mirror the source tree into the install dir. Use rsync if available for a
 # clean delete-extraneous sync; otherwise fall back to cp.
 if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete \
-    --exclude 'gitf-state.json' \
-    --exclude 'gitf-config.json' \
-    "$SRC/" "$INSTALL_DIR/"
+  rsync -a --delete "$SRC/" "$INSTALL_DIR/"
 else
   cp -R "$SRC/." "$INSTALL_DIR/"
 fi

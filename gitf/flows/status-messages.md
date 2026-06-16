@@ -41,7 +41,7 @@ develop and main are already in sync — nothing to release.
 ```
 gh is installed but not logged in. Two options:
   • Run `gh auth login`, then /gitf again — uses PRs (review/CI aware).
-  • Set .git/gitf-config.json to {"platform":"local"} — pure local merges, no PRs.
+  • Set .gitf/config to {"platform":"local"} — pure local merges, no PRs.
 ```
 
 ### blocked-review
@@ -67,4 +67,12 @@ gh is installed but not logged in. Two options:
 ```
 PR #<n> was closed without merging. State cleared.
 Run /gitf again to start fresh.
+```
+
+### blocked-code-review
+```
+⏸ Code review found issues I couldn't resolve on <branch>:
+  • <finding 1>
+  • <finding 2>
+  Fix them (or re-run with /gitf --skip-review to bypass), then /gitf to continue.
 ```

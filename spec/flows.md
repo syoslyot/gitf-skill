@@ -6,17 +6,19 @@ Formal specification for each flow in `/gitf`. These define expected behavior fo
 > Flows themselves are written against platform-agnostic coarse verbs
 > (`LAND`/`PUBLISH`/`SYNC`/`TAG`/`CLEANUP`) — see `gitf/flows/` and
 > `gitf/providers/`. The `local` provider replaces each `gh` PR cycle with a
-> synchronous `git merge --no-ff`, never blocks, and never writes state. The
-> spec below is the GitHub-provider reference; for the verb contract see
+> synchronous `git merge --no-ff` and never blocks on a PR. The spec below is the
+> GitHub-provider reference; for the verb contract see
 > `gitf/providers/README.md`.
 
 ---
 
-## Precondition: State file check (github provider only)
+## Precondition: State file check
 
-Before every flow on the `github` provider, check `.git/gitf-state.json`. If it
-exists, go to **FLOW RESUME** instead of running normal detection. The `local`
-provider never writes this file, so it has no resume path.
+Before every flow, check `.gitf/state.json`. If it exists, go to **FLOW RESUME**
+instead of running normal detection. State is written by the `github` provider
+for PR-merge pauses, and by **either** provider for the code-review pause
+(`step=awaiting_code_review`), which runs on the local branch before landing on
+`main`.
 
 ---
 
@@ -46,6 +48,10 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 | C | `awaiting_merge` (to main) | tag main → create back-merge PR → attempt merge or save state |
 | C | `awaiting_merge` (to develop) | pull develop → cleanup → delete state |
 
+For `step=awaiting_code_review` there is no PR. Re-run the code-review gate on
+the release/hotfix branch; if it passes, resume the flow at the land-to-main
+step; if it stops again, leave state in place and halt.
+
 ---
 
 ## Flow A — Feature/Fix → Develop
@@ -62,11 +68,11 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 **Postconditions (success)**:
 - Feature/fix branch deleted on remote
 - Local develop in sync with origin/develop
-- `.git/gitf-state.json` does not exist
+- `.gitf/state.json` does not exist
 
 **Postconditions (blocked)**:
 - PR exists on GitHub
-- `.git/gitf-state.json` saved with `step: "awaiting_merge"`
+- `.gitf/state.json` saved with `step: "awaiting_merge"`
 - User told what's blocking and what to do
 
 ---
@@ -98,6 +104,16 @@ git add <file> && git commit -m "chore: bump version to v<version>"
 git push -u origin release/v<version>
 ```
 
+### B-2.5: Code-review gate
+
+Run the configured reviewers (`.gitf/config` → `reviewers`) on
+`main..release/v<version>`. The AI judges each tool's output:
+- no blocking findings → proceed to B-3
+- findings it can fix → fix, commit to the release branch, re-run that reviewer
+- findings needing the user → save state (`step: awaiting_code_review`) and stop
+
+Skipped when `reviewers` is empty or `--skip-review` was passed.
+
 ### B-3: PR release → main
 
 Check `mergeStateStatus`:
@@ -116,7 +132,7 @@ Check `mergeStateStatus`:
 - `main` contains release commit + version bump, tagged `v<version>`
 - `develop` contains version bump via back-merge
 - Release branch deleted local and remote
-- `.git/gitf-state.json` does not exist
+- `.gitf/state.json` does not exist
 
 ---
 
@@ -125,6 +141,8 @@ Check `mergeStateStatus`:
 **Trigger**: on `hotfix/*`
 
 Same two-PR pattern as Flow B, but:
+- Code-review gate runs on `main..hotfix/*` before the PR to `main` (same logic
+  as B-2.5; can pause with `step: awaiting_code_review`)
 - First PR targets `main`
 - Version is always patch bump
 - Tag after PR to main merges
@@ -167,6 +185,7 @@ Then Flow A.
 
 ```
 Created → when a PR is created but mergeStateStatus != CLEAN
+        → when the code-review gate stops with unresolved findings (awaiting_code_review)
 Updated → when moving between steps within Flow B (main_pr_merged, develop_pr_number)
 Deleted → when the entire flow completes successfully
          → when a PR is found CLOSED without merge (reset for fresh start)

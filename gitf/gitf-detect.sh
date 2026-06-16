@@ -19,8 +19,9 @@
 
 set -uo pipefail
 
-# --- Locate the git dir (works from any subdirectory; empty if not a repo) ---
+# --- Locate the git dir + worktree root (empty if not a repo) ---
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || true)
+TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null || true)
 
 emit() {
   # $1=provider $2=needs_login $3=has_remote $4=default_remote
@@ -37,9 +38,9 @@ if [ -z "$GIT_DIR" ]; then
   exit 0
 fi
 
-# --- Config override: .git/gitf-config.json {"platform":"auto|github|local"} ---
+# --- Config override: .gitf/config {"platform":"auto|github|local",...} ---
 PLATFORM_CONFIG="auto"
-CONFIG_FILE="$GIT_DIR/gitf-config.json"
+CONFIG_FILE="$TOPLEVEL/.gitf/config"
 if [ -f "$CONFIG_FILE" ]; then
   # Tolerant parse: strip whitespace/CR, grab the platform value if valid.
   val=$(tr -d '[:space:]\r' < "$CONFIG_FILE" \

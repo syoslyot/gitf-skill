@@ -1,9 +1,19 @@
-# Flow Resume (github provider only)
+# Flow Resume
 
-Reached when `.git/gitf-state.json` exists. Only the `github` provider ever
-writes state, so resume is github-only; `local` never lands here.
+Reached when `.gitf/state.json` exists. Read the state file first and branch on
+`step`:
 
-Read the state file, then check the waiting PR:
+- `step=awaiting_code_review` → **code-review pause** (either provider). Re-enter
+  the code-review gate (`flows/code-review-gate.md`) from the top on the branch in
+  `release_branch` (the release/* branch for Flow B, or the hotfix/* branch for
+  Flow C). If it passes, continue the owning flow: Flow B from B-5, Flow C from
+  C-3. If it stops again, state stays and the run halts. No PR is involved here.
+- any other `step` → **PR-merge pause** (github only); follow the rest of this
+  file.
+
+## PR-merge pause (github)
+
+Check the waiting PR:
 
 ```bash
 gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
@@ -27,5 +37,5 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 | C | `awaiting_merge` (target=main) | `TAG <patch-version>` → `LAND hotfix→develop` → merge or save state |
 | C | `awaiting_merge` (target=develop) | `CLEANUP <hotfix-branch>` → `SYNC develop` → delete state → **flow-c-done** |
 
-Delete `.git/gitf-state.json` only when the entire flow is complete, or when a
+Delete `.gitf/state.json` only when the entire flow is complete, or when a
 PR was found `CLOSED` without merge (reset for a fresh start).

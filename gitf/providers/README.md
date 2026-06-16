@@ -35,9 +35,14 @@ Providers read these fields from the detector JSON:
 
 ## State and resume
 
-Only a provider that can **block** (await review / CI) needs `.git/gitf-state.json`
-and a resume path. Today that is `github` only. `local` lands synchronously and
-**never** writes state.
+`.gitf/state.json` records a paused flow. Two things can pause:
+
+- **PR that cannot auto-merge** (await review / CI) — `github` only.
+- **code-review gate** (B-4 / C-2) stopping with unresolved findings — **either**
+  provider, since the review runs on the local branch before landing.
+
+So `local` writes state only for `step=awaiting_code_review`; every other local
+step lands synchronously with no state.
 
 ## Adding a platform
 
@@ -48,4 +53,4 @@ and a resume path. Today that is `github` only. `local` lands synchronously and
 
 GitLab/Bitbucket native MR/PR are intentionally **not** implemented — the
 structure is reserved here, not built. Non-GitHub remotes fall back to `local`
-(set `.git/gitf-config.json` `{"platform":"local"}`).
+(set `.gitf/config` `{"platform":"local"}`).

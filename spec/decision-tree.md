@@ -22,10 +22,13 @@ Capability rules (evaluated in order, `platform_config=auto`):
 4. gh not installed               → provider=local
 ```
 
-`.git/gitf-config.json` `{"platform":"github|local"}` overrides the auto result.
-The chosen provider determines how the coarse verbs (`LAND`/`PUBLISH`/`SYNC`/
-`TAG`/`CLEANUP`) are carried out. Only `github` can block and therefore writes
-`.git/gitf-state.json`; `local` lands synchronously and never writes state.
+`.gitf/config` `{"platform":"github|local",...}` overrides the auto result, and
+also carries `reviewers` (the ordered code-review tools). The chosen provider
+determines how the coarse verbs (`LAND`/`PUBLISH`/`SYNC`/`TAG`/`CLEANUP`) are
+carried out. `.gitf/state.json` records a paused flow: a github PR that cannot
+auto-merge, or the code-review gate (B-4 / C-2) stopping with unresolved
+findings — the latter pauses on **either** provider, since the review runs on the
+local branch before landing.
 
 ## State detection
 

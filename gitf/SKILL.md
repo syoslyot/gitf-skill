@@ -1,6 +1,6 @@
 ---
 name: gitf
-description: Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and current branch state, then executes the appropriate flow end-to-end: feature/fix to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. On GitHub it uses PRs and, if branch protection blocks auto-merge, saves state to .gitf/state.json and resumes on the next /gitf call. With no remote or no gh it falls back to local merges.
+description: "Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and current branch state, then executes the appropriate flow end-to-end: feature/fix to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. On GitHub it uses PRs and, if branch protection blocks auto-merge, saves state to .gitf/state.json and resumes on the next /gitf call. With no remote or no gh it falls back to local merges."
 ---
 
 # /gitf — Personal Git Flow Automation

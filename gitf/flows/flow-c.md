@@ -21,7 +21,12 @@ C-3.
 
 `PUBLISH <hotfix-branch>` then `LAND base=main head=<hotfix-branch> keep-branch`.
 
-- github: blocked → save state (`flow=C, step=awaiting_merge`, `target_branch=main`) → stop.
+- github: blocked → save the entry keyed by `<hotfix-branch>` and stop:
+  ```bash
+  pause_sha=$(git rev-parse "<hotfix-branch>")
+  bash ~/.claude/skills/gitf/gitf-state.sh put "<hotfix-branch>" \
+    '{"flow":"C","step":"awaiting_merge","pr_number":<n>,"source_branch":"<hotfix-branch>","target_branch":"main","release_branch":"<hotfix-branch>","version":"<patch-version>","version_mode":true,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
+  ```
 - local: synchronous merge into main, push if `has_remote`.
 
 ### C-4: Tag main
@@ -32,10 +37,16 @@ C-3.
 
 `LAND base=develop head=<hotfix-branch>` (github: `--head <hotfix-branch>`).
 
-- github: blocked → update state (`step=awaiting_merge`, `target_branch=develop`) → stop.
+- github: blocked → update the entry (still keyed by `<hotfix-branch>`) and stop:
+  ```bash
+  pause_sha=$(git rev-parse "<hotfix-branch>")
+  bash ~/.claude/skills/gitf/gitf-state.sh put "<hotfix-branch>" \
+    '{"flow":"C","step":"awaiting_merge","pr_number":<develop-pr-n>,"source_branch":"<hotfix-branch>","target_branch":"develop","release_branch":"<hotfix-branch>","version":"<patch-version>","version_mode":true,"main_pr_merged":true,"develop_pr_number":<develop-pr-n>,"pause_sha":"'"$pause_sha"'"}'
+  ```
 - local: synchronous merge into develop, push if `has_remote`.
 
 ### C-6: Cleanup
 
-`CLEANUP <hotfix-branch>` → `SYNC develop` → delete state (github) →
+`CLEANUP <hotfix-branch>` → `SYNC develop` → drop the entry
+(`gitf-state.sh del "<hotfix-branch>"`; `CLEANUP` already does this) →
 **status-messages: flow-c-done**.

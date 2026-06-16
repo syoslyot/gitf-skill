@@ -59,8 +59,12 @@ otherwise continue to B-5.
 `keep-branch` is required — the release branch is still needed for the
 back-merge in B-7.
 
-- github: if blocked, state is saved (`step=awaiting_merge_to_main`,
-  `main_pr_merged=false`) → stop.
+- github: if blocked, save the entry keyed by `<release-branch>` and stop:
+  ```bash
+  pause_sha=$(git rev-parse "<release-branch>")
+  bash ~/.claude/skills/gitf/gitf-state.sh put "<release-branch>" \
+    '{"flow":"B","step":"awaiting_merge_to_main","pr_number":<n>,"source_branch":"<release-branch>","target_branch":"main","release_branch":"<release-branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
+  ```
 - local: synchronous merge into main, push main if `has_remote`.
 
 ### B-6 [version only]: Tag main
@@ -73,13 +77,19 @@ never after B-7.
 `LAND base=develop head=<release-branch>` (no `keep-branch` — done with it after).
 
 - github: must create the back-merge PR with `--head <release-branch>` (current
-  branch may be `main`). If blocked, update state
-  (`step=awaiting_merge_to_develop`, `main_pr_merged=true`) → stop.
+  branch may be `main`). If blocked, update the entry (still keyed by
+  `<release-branch>`) and stop:
+  ```bash
+  pause_sha=$(git rev-parse "<release-branch>")
+  bash ~/.claude/skills/gitf/gitf-state.sh put "<release-branch>" \
+    '{"flow":"B","step":"awaiting_merge_to_develop","pr_number":<develop-pr-n>,"source_branch":"<release-branch>","target_branch":"develop","release_branch":"<release-branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":true,"develop_pr_number":<develop-pr-n>,"pause_sha":"'"$pause_sha"'"}'
+  ```
 - local: synchronous merge into develop, push if `has_remote`.
 
 ### B-8: Cleanup
 
-`CLEANUP <release-branch>` → `SYNC develop` → delete `.gitf/state.json`
-(github) → **status-messages: flow-b-done**.
+`CLEANUP <release-branch>` → `SYNC develop` → drop the entry
+(`gitf-state.sh del "<release-branch>"`; `CLEANUP` already does this, harmless to
+repeat) → **status-messages: flow-b-done**.
 
 **Tag ordering invariant**: always between B-5 (main has the commit) and B-7.

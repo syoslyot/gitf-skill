@@ -30,9 +30,14 @@ FOR each reviewer in order:
     Fix them, commit to <branch>, then re-run THIS SAME reviewer.
 
   IF blocking findings needing the user (can't fix / design decision):
-    Save .gitf/state.json with step=awaiting_code_review (schema in SKILL.md),
-    setting release_branch to the branch under review — the release/* branch
-    (Flow B) or the hotfix/* branch (Flow C). Resume reads it from there.
+    Capture the pause point and write the entry keyed by <branch>:
+    ```bash
+    pause_sha=$(git rev-parse "<branch>")
+    bash ~/.claude/skills/gitf/gitf-state.sh put "<branch>" \
+      '{"flow":"<B|C>","step":"awaiting_code_review","pr_number":null,"release_branch":"<branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
+    ```
+    <branch> is the release/* branch (Flow B) or the hotfix/* branch (Flow C);
+    resume reads release_branch from there. Schema is in SKILL.md.
     Emit status-messages: blocked-code-review listing the remaining findings.
     STOP.
 

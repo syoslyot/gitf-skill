@@ -34,6 +34,15 @@ ls ~/.claude/skills/gitf/flows/ ~/.claude/skills/gitf/providers/ >/dev/null 2>&1
 If `GITF_NEEDS_HEAL` printed → run `gitf-update.sh` once more to pull the full
 tree before proceeding.
 
+Then check whether this project has been configured:
+
+```bash
+[ -f .gitf/config ] || echo "GITF_NOT_CONFIGURED"
+```
+
+If `GITF_NOT_CONFIGURED` printed → load `INSTALL.md`, run the one-time setup, and
+only then continue. If `.gitf/config` already exists, never read `INSTALL.md`.
+
 ---
 
 ## Step 0: Detect platform capabilities

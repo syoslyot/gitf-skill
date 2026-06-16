@@ -4,10 +4,11 @@ Active when `gitf-detect.sh` reports `"provider":"local"` — no remote, or `gh`
 unavailable, or `.gitf/config` forces `local`.
 
 There is **no PR and no CI gate**. Landing is a synchronous `--no-ff` merge and
-**never blocks**. The only time this provider writes `.gitf/state.json` is the
-code-review pause (`step=awaiting_code_review`) — when the B-4 / C-2 review gate
-stops with findings the AI could not resolve. All other steps run straight
-through with no state and no resume.
+**never blocks**. The only pause under this provider is the code-review pause
+(`step=awaiting_code_review`) — when the B-4 / C-2 review gate stops with findings
+the AI could not resolve; the gate (a flow, not this provider) writes the state
+entry via `gitf-state.sh`. All other steps run straight through with no state and
+no resume.
 
 Behavior of `PUBLISH`/`SYNC`/remote cleanup depends on `has_remote`:
 
@@ -21,6 +22,10 @@ Use `<remote>` = the detector's `default_remote`.
 ---
 
 ## LAND base head [keep-branch]
+
+**Idempotency probe (cache-miss runs only).** If `git log <base>..<head>` is
+empty, `<head>` is already merged into `<base>` — skip the merge and proceed to
+the next flow step.
 
 ```bash
 git checkout <base>
@@ -54,6 +59,9 @@ git checkout <branch> && git pull <remote> <branch>
 
 ## TAG version
 
+Idempotency (cache-miss runs): skip if the tag already exists
+(`git tag -l v<version>` is non-empty).
+
 ```bash
 git tag -a v<version> -m "v<version>"
 # has_remote=true:
@@ -67,4 +75,7 @@ git checkout develop
 git branch -d <branch> 2>/dev/null || true
 # has_remote=true: also remove it from the remote
 git push <remote> --delete <branch> 2>/dev/null || true
+# Hygiene: drop this branch's state entry so a future same-named branch
+# can never get a false cache hit.
+bash ~/.claude/skills/gitf/gitf-state.sh del "<branch>"
 ```

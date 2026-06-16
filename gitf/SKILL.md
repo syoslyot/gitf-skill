@@ -73,15 +73,29 @@ Flags:
 - `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
   C-2) for this run only. Default `false`.
 
-State (written by **either** provider — github for PR-merge pauses, both
-providers for the code-review pause):
+State is a branch-keyed map (written by **either** provider — github for
+PR-merge pauses, both providers for the code-review pause). Look it up by the
+current branch (cache hit / miss):
 
 ```bash
-cat .gitf/state.json 2>/dev/null
+current=$(git branch --show-current)
+entry=$(bash ~/.claude/skills/gitf/gitf-state.sh get "$current")
 ```
 
-If the file exists → load `flows/resume.md` (and `providers/<provider>.md`),
-then follow resume. If not → run detection from Step 1.
+- **`entry` non-empty** → read its `pause_sha` and validate identity:
+
+  ```bash
+  bash ~/.claude/skills/gitf/gitf-state.sh valid "$current" "<pause_sha>"
+  ```
+
+  - exit 0 → **CACHE HIT**: load `flows/resume.md` (and `providers/<provider>.md`)
+    and resume this entry. Do not re-derive anything from git/gh beyond what
+    resume needs.
+  - exit 1 → reused branch name (the paused tip is no longer an ancestor); treat
+    as **CACHE MISS**.
+
+- **`entry` empty** → **CACHE MISS**: run detection from Step 1; the chosen flow
+  executes in idempotent mode (probe git/gh before each action; see each flow).
 
 ---
 
@@ -101,7 +115,7 @@ git log main..develop --oneline
 ## Decision Tree → which flow to load
 
 ```
-.gitf/state.json exists?          → flows/resume.md
+Step 0.5 cache hit?               → flows/resume.md
 
 On feature/* or fix/*             → flows/flow-a.md
 On hotfix/*                       → flows/flow-c.md
@@ -140,27 +154,31 @@ blockable PR; local = synchronous `--no-ff` merge).
 
 ---
 
-## State file schema
+## State file schema (v2)
 
-Saved at `.gitf/state.json` when the flow must pause — a PR that cannot be
-auto-merged (github), or the code-review gate stopping with unresolved findings
-(either provider). Deleted when the full flow completes (or a PR was closed
-without merge).
+`.gitf/state.json` is a branch-keyed map. Each paused flow is one entry; flows on
+different branches are independent. Read/write it **only** via `gitf-state.sh`
+(get/put/del/list/valid) — never hand-edit the JSON.
 
 ```json
 {
-  "flow": "A",
-  "step": "awaiting_merge",
-  "pr_number": 3,
-  "source_branch": "feature/auth-jwt",
-  "target_branch": "develop",
-  "release_branch": null,
-  "version": null,
-  "version_mode": false,
-  "main_pr_merged": false,
-  "develop_pr_number": null
+  "version": 2,
+  "flows": {
+    "feature/auth-jwt": {
+      "flow": "A", "step": "awaiting_merge", "pr_number": 3,
+      "source_branch": "feature/auth-jwt", "target_branch": "develop",
+      "release_branch": null, "version": null, "version_mode": false,
+      "main_pr_merged": false, "develop_pr_number": null,
+      "pause_sha": "a1b2c3d"
+    }
+  }
 }
 ```
+
+An entry is written on pause — a PR that cannot be auto-merged (github), or the
+code-review gate stopping with unresolved findings (either provider). The entry
+is deleted when its flow completes, when its PR was closed without merge, or when
+its branch is cleaned up.
 
 | Field | Description |
 |-------|-------------|
@@ -174,6 +192,7 @@ without merge).
 | `version_mode` | whether `-v` was passed — drives tagging on resume |
 | `main_pr_merged` | (B) whether release→main is done |
 | `develop_pr_number` | (B) back-merge PR number once created |
+| `pause_sha` | branch tip at pause time; resume trusts the entry only if this is an ancestor of the current branch |
 
 ---
 
@@ -191,7 +210,16 @@ without merge).
   current branch may be `main`).
 - Delete release/feature/fix branches after the flow completes (local + remote).
 - github provider: check `mergeStateStatus` before `gh pr merge` — never merge
-  blindly. Delete `.gitf/state.json` only when the flow is fully complete.
+  blindly. Drop a branch's state entry (via `gitf-state.sh del`) only when its
+  flow is fully complete.
+- **Ambiguity halts.** On any ambiguous or unexpected state — a merge conflict,
+  or contradictory probe results — stop and report. Never guess or auto-recover.
+- **In-flight ordering** (cache-miss): starting a release (B-0) halts if any
+  unfinished `release/*` or `hotfix/*` exists; a hotfix (C-0) halts only on
+  another unfinished `hotfix/*`. Resuming a suspended branch (cache hit) is never
+  blocked by this guard.
+- State lives in `.gitf/state.json` (v2 map) accessed only via `gitf-state.sh`.
+  A paused flow's entry is keyed by its owning branch and carries `pause_sha`.
 - Code-review gate (B-4 / C-2) runs on the local branch before landing on main,
   so it pauses on either provider. The reviewer tools come from `.gitf/config`;
   judge their output — do not hardcode an "empty == pass" rule. `--skip-review`

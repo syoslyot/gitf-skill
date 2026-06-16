@@ -58,6 +58,17 @@ tool you selected during first-run setup (stored in `.gitf/config`).
 Bypass the gate for one run with `/gitf --skip-review`. If no review tool is
 configured, the gate is skipped entirely.
 
+## Multiple branches in flight
+
+Each branch keeps its own paused state, so several flows can be suspended at
+once. `/gitf` always acts on whichever branch you currently have checked out:
+check out a paused branch and run `/gitf` to resume exactly that flow. Resume is
+matched by branch name **and** a fingerprint of the tip at pause time, so
+deleting a branch and later creating a different one with the same name never
+resumes the old flow by mistake. Finished branches have their state cleaned up
+automatically; an abandoned branch's leftover state is ignored safely on the
+next run.
+
 ## First-run setup
 
 The first `/gitf` in a project asks which review tool to use and writes

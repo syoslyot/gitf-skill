@@ -63,14 +63,18 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 # Mirror the source tree into the install dir. Use rsync if available for a
-# clean delete-extraneous sync; otherwise fall back to cp.
+# clean delete-extraneous sync; otherwise fall back to cp. tests/ is dev-only —
+# exclude it so it never lands in a user's install.
 if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete "$SRC/" "$INSTALL_DIR/"
+  rsync -a --delete --exclude 'tests/' "$SRC/" "$INSTALL_DIR/"
 else
   cp -R "$SRC/." "$INSTALL_DIR/"
 fi
+# Prune dev-only files (covers the cp fallback and cleans older installs that
+# shipped tests/ before this exclusion existed).
+rm -rf "$INSTALL_DIR/tests"
 
-chmod +x "$INSTALL_DIR/gitf-detect.sh" "$INSTALL_DIR/gitf-update.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/gitf-detect.sh" "$INSTALL_DIR/gitf-state.sh" "$INSTALL_DIR/gitf-update.sh" 2>/dev/null || true
 
 if [ "$NEEDS_HEAL" = "true" ] && [ "$INSTALLED" = "$LATEST" ]; then
   echo "gitf healed: restored multi-file layout (v$LATEST)"

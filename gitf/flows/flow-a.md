@@ -5,7 +5,10 @@
 Steps (verbs resolved by the active provider):
 
 1. `LAND base=develop head=<current-branch>`
-2. On success → `SYNC develop` → **status-messages: flow-a-done**
+2. On success → `SYNC develop` → drop any state entry for this branch
+   (`gitf-state.sh del "<current-branch>"`; harmless if none — this also clears a
+   stale entry left by a deleted-then-recreated same-named branch) →
+   **status-messages: flow-a-done**
 
 **PR/commit title** (github provider): derive from the branch name in
 Conventional Commits form.

@@ -7,6 +7,13 @@ Steps marked **[version only]** run only when `-v` was passed (`VERSION_MODE=tru
 Everything here except `LAND` is platform-independent — version detection,
 bumping, and tagging are plain git.
 
+**Resuming on an existing `release/*` branch via cache-miss** (state was lost, so
+the `-v` flag from the original run is gone): infer `version_mode` and `version`
+from the branch name instead of the flag — `release/v<X.Y.Z>` → `version_mode=true`,
+`version=<X.Y.Z>`; `release/<YYYY-MM-DD>` → `version_mode=false`. This keeps tag
+handling (B-6) correct without the saved entry. (When triggered fresh from
+`develop`, use the `-v` flag as normal.)
+
 ### B-0: In-flight guard (cache-miss, when triggered from develop)
 
 A release must wait for any in-flight production change: you do not ship a release

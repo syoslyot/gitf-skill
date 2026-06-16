@@ -56,15 +56,17 @@ That's it.
 | A remote but no usable `gh` | Local `--no-ff` merges, then pushes the updated branch |
 | No remote at all | Pure local `--no-ff` merges |
 
-Detection asks a simple question — *is `gh` installed and logged in?* — not *what does the remote URL look like*. A logged-in `gh` routes to the right host on its own, so **GitHub Enterprise works with no special configuration**. To force a mode, drop `{"platform":"local"}` (or `"github"`) into `.git/gitf-config.json`.
+Detection asks a simple question — *is `gh` installed and logged in?* — not *what does the remote URL look like*. A logged-in `gh` routes to the right host on its own, so **GitHub Enterprise works with no special configuration**. To force a mode, set `{"platform":"local"}` (or `"github"`) in `.gitf/config`.
 
 ---
 
 ## Branch protection aware
 
-If your repo has branch protection rules that require a review or waiting on CI, `/gitf` doesn't fail — it pauses. It saves its current progress to `.git/gitf-state.json` and tells you what's blocking.
+If your repo has branch protection rules that require a review or waiting on CI, `/gitf` doesn't fail — it pauses. It saves its current progress to `.gitf/state.json` and tells you what's blocking.
 
 Once the review is approved or CI passes, run `/gitf` again. It reads the saved state and picks up exactly where it left off.
+
+The same pause/resume mechanism backs the **pre-release code-review gate**: before a release or hotfix lands on `main`, `/gitf` runs your configured review tool (chosen on first run, stored in `.gitf/config`). It auto-fixes what it can, and if anything needs your judgment it pauses with the findings. Fix them and run `/gitf` again, or bypass once with `/gitf --skip-review`.
 
 ---
 

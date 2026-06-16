@@ -35,9 +35,26 @@ Providers read these fields from the detector JSON:
 
 ## State and resume
 
-Only a provider that can **block** (await review / CI) needs `.git/gitf-state.json`
-and a resume path. Today that is `github` only. `local` lands synchronously and
-**never** writes state.
+`.gitf/state.json` is a **v2 branch-keyed map** (`{"version":2,"flows":{...}}`),
+accessed only via `gitf-state.sh` (get/put/del/list/valid). Each paused flow is
+one entry keyed by its owning branch, so multiple branches can be suspended
+independently. Two things can pause:
+
+- **PR that cannot auto-merge** (await review / CI) — `github` only.
+- **code-review gate** (B-4 / C-2) stopping with unresolved findings — **either**
+  provider, since the review runs on the local branch before landing.
+
+So `local` produces an entry only for `step=awaiting_code_review`; every other
+local step lands synchronously with no state.
+
+Resume is **by current branch**: Step 0.5 looks up the entry for the branch you
+are on and validates its `pause_sha` (must be an ancestor of the current tip) to
+reject a reused branch name. A valid entry is a **cache hit** → trust and resume.
+A missing or stale entry is a **cache miss** → the flow re-derives progress from
+git/gh idempotently (probe before each action) and halts on any ambiguity. The
+flow writes/updates/deletes entries; `CLEANUP` also drops the entry it deletes.
+A v1 (non-`flows`) file is treated as empty → everything is a cache miss, which
+is the migration path.
 
 ## Adding a platform
 
@@ -48,4 +65,4 @@ and a resume path. Today that is `github` only. `local` lands synchronously and
 
 GitLab/Bitbucket native MR/PR are intentionally **not** implemented — the
 structure is reserved here, not built. Non-GitHub remotes fall back to `local`
-(set `.git/gitf-config.json` `{"platform":"local"}`).
+(set `.gitf/config` `{"platform":"local"}`).

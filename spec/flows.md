@@ -6,23 +6,41 @@ Formal specification for each flow in `/gitf`. These define expected behavior fo
 > Flows themselves are written against platform-agnostic coarse verbs
 > (`LAND`/`PUBLISH`/`SYNC`/`TAG`/`CLEANUP`) — see `gitf/flows/` and
 > `gitf/providers/`. The `local` provider replaces each `gh` PR cycle with a
-> synchronous `git merge --no-ff`, never blocks, and never writes state. The
-> spec below is the GitHub-provider reference; for the verb contract see
+> synchronous `git merge --no-ff` and never blocks on a PR. The spec below is the
+> GitHub-provider reference; for the verb contract see
 > `gitf/providers/README.md`.
+
+> **Numbering & state note.** Section labels below (B-1, B-2.5, …) are *coarse
+> phase* labels; the executable flow files (`gitf/flows/flow-b.md`,
+> `flow-c.md`) use finer step numbers (B-0…B-8, C-0…C-6) and are authoritative.
+> Wherever this spec says "save / update / delete state", that means writing /
+> updating / dropping the **branch-keyed entry** in `.gitf/state.json` via
+> `gitf-state.sh` (never a single global object — see the State lookup section).
 
 ---
 
-## Precondition: State file check (github provider only)
+## Precondition: State lookup (cache hit / miss)
 
-Before every flow on the `github` provider, check `.git/gitf-state.json`. If it
-exists, go to **FLOW RESUME** instead of running normal detection. The `local`
-provider never writes this file, so it has no resume path.
+Before every flow, look up the **current branch's** entry in the v2 branch-keyed
+map `.gitf/state.json` via `gitf-state.sh get <branch>`. If an entry exists and
+its `pause_sha` is still an ancestor of the current tip (`gitf-state.sh valid`),
+that is a **cache hit** → go to **FLOW RESUME**. Otherwise (no entry, or a reused
+branch name whose `pause_sha` no longer applies) it is a **cache miss** → run
+normal detection; the chosen flow runs idempotently and halts on ambiguity.
+
+Entries are written when a flow pauses — by the `github` provider's caller for
+PR-merge pauses, and by the code-review gate for the code-review pause
+(`step=awaiting_code_review`, **either** provider, since the review runs on the
+local branch before landing on `main`). A v1 (non-`flows`) file is treated as
+empty, so it is always a cache miss — that is the migration path.
 
 ---
 
 ## FLOW RESUME
 
-Read state file. Check waiting PR:
+Read the current branch's entry (`gitf-state.sh get <branch>`). For a code-review
+pause (`step=awaiting_code_review`) there is no PR — re-run the gate (see below).
+Otherwise check the waiting PR:
 
 ```bash
 gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
@@ -34,17 +52,21 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 | `OPEN` | `BLOCKED` | Report: waiting for review |
 | `OPEN` | `UNSTABLE` | Report: CI failed |
 | `OPEN` | `UNKNOWN` / pending | Report: CI still running |
-| `CLOSED` (not merged) | — | Report: PR closed without merge → delete state file |
+| `CLOSED` (not merged) | — | Report: PR closed without merge → drop the branch's entry |
 
 ### Next steps by flow and step
 
 | Flow | Step | Next action after PR merged |
 |------|------|-----------------------------|
-| A | `awaiting_merge` | pull develop → delete state |
-| B | `awaiting_merge_to_main` | tag main → create back-merge PR → attempt merge or save state |
-| B | `awaiting_merge_to_develop` | pull develop → cleanup release branch → delete state → report |
-| C | `awaiting_merge` (to main) | tag main → create back-merge PR → attempt merge or save state |
-| C | `awaiting_merge` (to develop) | pull develop → cleanup → delete state |
+| A | `awaiting_merge` | pull develop → drop entry |
+| B | `awaiting_merge_to_main` | tag main → create back-merge PR → attempt merge or update entry |
+| B | `awaiting_merge_to_develop` | pull develop → cleanup release branch → drop entry → report |
+| C | `awaiting_merge` (to main) | tag main → create back-merge PR → attempt merge or update entry |
+| C | `awaiting_merge` (to develop) | pull develop → cleanup → drop entry |
+
+For `step=awaiting_code_review` there is no PR. Re-run the code-review gate on
+the release/hotfix branch; if it passes, resume the flow at the land-to-main
+step; if it stops again, leave state in place and halt.
 
 ---
 
@@ -62,11 +84,11 @@ gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup
 **Postconditions (success)**:
 - Feature/fix branch deleted on remote
 - Local develop in sync with origin/develop
-- `.git/gitf-state.json` does not exist
+- `.gitf/state.json` does not exist
 
 **Postconditions (blocked)**:
 - PR exists on GitHub
-- `.git/gitf-state.json` saved with `step: "awaiting_merge"`
+- `.gitf/state.json` saved with `step: "awaiting_merge"`
 - User told what's blocking and what to do
 
 ---
@@ -98,6 +120,16 @@ git add <file> && git commit -m "chore: bump version to v<version>"
 git push -u origin release/v<version>
 ```
 
+### B-2.5: Code-review gate
+
+Run the configured reviewers (`.gitf/config` → `reviewers`) on
+`main..release/v<version>`. The AI judges each tool's output:
+- no blocking findings → proceed to B-3
+- findings it can fix → fix, commit to the release branch, re-run that reviewer
+- findings needing the user → save state (`step: awaiting_code_review`) and stop
+
+Skipped when `reviewers` is empty or `--skip-review` was passed.
+
 ### B-3: PR release → main
 
 Check `mergeStateStatus`:
@@ -116,7 +148,7 @@ Check `mergeStateStatus`:
 - `main` contains release commit + version bump, tagged `v<version>`
 - `develop` contains version bump via back-merge
 - Release branch deleted local and remote
-- `.git/gitf-state.json` does not exist
+- `.gitf/state.json` does not exist
 
 ---
 
@@ -125,6 +157,8 @@ Check `mergeStateStatus`:
 **Trigger**: on `hotfix/*`
 
 Same two-PR pattern as Flow B, but:
+- Code-review gate runs on `main..hotfix/*` before the PR to `main` (same logic
+  as B-2.5; can pause with `step: awaiting_code_review`)
 - First PR targets `main`
 - Version is always patch bump
 - Tag after PR to main merges
@@ -163,13 +197,19 @@ Then Flow A.
 
 ---
 
-## State file lifecycle
+## State entry lifecycle
+
+Each entry is keyed by its owning branch and carries `pause_sha` (the branch tip
+at pause time). All access is via `gitf-state.sh`.
 
 ```
 Created → when a PR is created but mergeStateStatus != CLEAN
+        → when the code-review gate stops with unresolved findings (awaiting_code_review)
 Updated → when moving between steps within Flow B (main_pr_merged, develop_pr_number)
-Deleted → when the entire flow completes successfully
-         → when a PR is found CLOSED without merge (reset for fresh start)
+Deleted → when the entry's flow completes successfully
+         → when its branch is cleaned up (CLEANUP drops the entry)
+         → when its PR is found CLOSED without merge (reset for fresh start)
 ```
 
-State file is never deleted mid-flow unless the PR was abandoned.
+An entry is never deleted mid-flow unless its PR was abandoned. On cache miss the
+flow rebuilds progress idempotently rather than relying on a stored entry.

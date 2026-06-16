@@ -13,8 +13,9 @@ Detect the version file (same order as Flow B), always compute a **patch** bump.
 
 Run the shared code-review gate (`flows/code-review-gate.md`) on
 `<hotfix-branch>` against `main..<hotfix-branch>`. If it stops with unresolved
-findings, state is saved (`flow=C, step=awaiting_code_review`) and the run halts
-here; otherwise continue to C-3.
+findings, state is saved (`flow=C, step=awaiting_code_review`,
+`release_branch=<hotfix-branch>`) and the run halts here; otherwise continue to
+C-3.
 
 ### C-3: Land hotfix → main
 

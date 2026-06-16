@@ -4,9 +4,10 @@ Reached when `.gitf/state.json` exists. Read the state file first and branch on
 `step`:
 
 - `step=awaiting_code_review` → **code-review pause** (either provider). Re-enter
-  the code-review gate (`flows/code-review-gate.md`) on `release_branch` from the
-  top. If it passes, continue the owning flow: Flow B from B-5, Flow C from C-3.
-  If it stops again, state stays and the run halts. No PR is involved here.
+  the code-review gate (`flows/code-review-gate.md`) from the top on the branch in
+  `release_branch` (the release/* branch for Flow B, or the hotfix/* branch for
+  Flow C). If it passes, continue the owning flow: Flow B from B-5, Flow C from
+  C-3. If it stops again, state stays and the run halts. No PR is involved here.
 - any other `step` → **PR-merge pause** (github only); follow the rest of this
   file.
 

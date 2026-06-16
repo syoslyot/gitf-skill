@@ -169,7 +169,7 @@ without merge).
 | `pr_number` | the PR currently waiting (null for `awaiting_code_review`) |
 | `source_branch` | branch that was landed |
 | `target_branch` | base branch of the waiting PR |
-| `release_branch` | (B/C) e.g. `release/2026-06-15` or `release/v1.2.0` |
+| `release_branch` | (B/C) the release/* or (C) hotfix/* branch under review/merge — also the branch the `awaiting_code_review` resume re-reviews |
 | `version` | (B/C, version mode) version string |
 | `version_mode` | whether `-v` was passed — drives tagging on resume |
 | `main_pr_merged` | (B) whether release→main is done |

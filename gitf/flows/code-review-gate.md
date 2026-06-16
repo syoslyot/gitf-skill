@@ -34,7 +34,7 @@ FOR each reviewer in order:
     ```bash
     pause_sha=$(git rev-parse "<branch>")
     bash ~/.claude/skills/gitf/gitf-state.sh put "<branch>" \
-      '{"flow":"<B|C>","step":"awaiting_code_review","pr_number":null,"release_branch":"<branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
+      '{"flow":"<B|C>","step":"awaiting_code_review","pr_number":null,"source_branch":"<branch>","target_branch":"main","release_branch":"<branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
     ```
     <branch> is the release/* branch (Flow B) or the hotfix/* branch (Flow C);
     resume reads release_branch from there. Schema is in SKILL.md.

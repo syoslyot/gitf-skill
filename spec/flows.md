@@ -10,6 +10,13 @@ Formal specification for each flow in `/gitf`. These define expected behavior fo
 > GitHub-provider reference; for the verb contract see
 > `gitf/providers/README.md`.
 
+> **Numbering & state note.** Section labels below (B-1, B-2.5, …) are *coarse
+> phase* labels; the executable flow files (`gitf/flows/flow-b.md`,
+> `flow-c.md`) use finer step numbers (B-0…B-8, C-0…C-6) and are authoritative.
+> Wherever this spec says "save / update / delete state", that means writing /
+> updating / dropping the **branch-keyed entry** in `.gitf/state.json` via
+> `gitf-state.sh` (never a single global object — see the State lookup section).
+
 ---
 
 ## Precondition: State lookup (cache hit / miss)

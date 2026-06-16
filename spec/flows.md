@@ -2,11 +2,21 @@
 
 Formal specification for each flow in `/gitf`. These define expected behavior for evals and contributors.
 
+> **Platform note.** The GitHub commands below describe the `github` provider.
+> Flows themselves are written against platform-agnostic coarse verbs
+> (`LAND`/`PUBLISH`/`SYNC`/`TAG`/`CLEANUP`) — see `gitf/flows/` and
+> `gitf/providers/`. The `local` provider replaces each `gh` PR cycle with a
+> synchronous `git merge --no-ff`, never blocks, and never writes state. The
+> spec below is the GitHub-provider reference; for the verb contract see
+> `gitf/providers/README.md`.
+
 ---
 
-## Precondition: State file check
+## Precondition: State file check (github provider only)
 
-Before every flow, check `.git/gitf-state.json`. If it exists, go to **FLOW RESUME** instead of running normal detection.
+Before every flow on the `github` provider, check `.git/gitf-state.json`. If it
+exists, go to **FLOW RESUME** instead of running normal detection. The `local`
+provider never writes this file, so it has no resume path.
 
 ---
 

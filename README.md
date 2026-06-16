@@ -38,12 +38,25 @@ That's it.
 
 | Your current state | What /gitf does |
 |-------------------|-----------------|
-| On `feature/*` or `fix/*` | Push → PR to develop → merge → pull |
-| On `hotfix/*` | PR to main → tag → PR to develop → merge → pull |
-| On `develop`, ahead of `main` | Full release: branch → bump version → PR to main → tag → back-merge → clean up |
+| On `feature/*` or `fix/*` | Land on develop (PR or local merge) → sync |
+| On `hotfix/*` | Land on main → tag → back-merge to develop → sync |
+| On `develop`, ahead of `main` | Full release: branch → bump version → land on main → tag → back-merge → clean up |
 | On `develop`, AI committed here by mistake | Detects rogue commits, creates a branch from context, moves them over, then proceeds |
 | On `develop`, in sync with `main` | Tells you there's nothing to release |
 | On `main` | Warns you not to work here directly |
+
+## Works with or without GitHub
+
+`/gitf` detects what your environment can do and adapts — it doesn't assume GitHub:
+
+| Environment | How branches land |
+|-------------|-------------------|
+| GitHub remote + `gh` logged in | Pull requests (review/CI aware, resumable) |
+| `gh` installed but not logged in | Stops and offers: log in, or switch to local mode |
+| A remote but no usable `gh` | Local `--no-ff` merges, then pushes the updated branch |
+| No remote at all | Pure local `--no-ff` merges |
+
+Detection asks a simple question — *is `gh` installed and logged in?* — not *what does the remote URL look like*. A logged-in `gh` routes to the right host on its own, so **GitHub Enterprise works with no special configuration**. To force a mode, drop `{"platform":"local"}` (or `"github"`) into `.git/gitf-config.json`.
 
 ---
 
@@ -83,14 +96,16 @@ Then use `/gitf` in any Claude Code session across any project.
 ### Requirements
 
 - [Claude Code](https://claude.ai/code)
-- [GitHub CLI](https://cli.github.com/) (`gh`), authenticated
-- A repo with a `develop` branch and a GitHub remote
+- A git repo with a `develop` branch
+- *Optional* — [GitHub CLI](https://cli.github.com/) (`gh`), authenticated, for the PR-based GitHub flow. Without it, `/gitf` runs in local-merge mode.
 
 ---
 
 ## Automatic updates
 
-Once installed, the skill keeps itself up to date. The first time you use `/gitf` each week, it silently checks this repo for a newer version. If one exists, it downloads and installs it in the background. You'll see a one-line notice; the new version takes effect next session.
+Once installed, the skill keeps itself up to date. The first time you use `/gitf` each week, it silently checks this repo for a newer version. If one exists, it downloads the latest release tarball and syncs the whole `gitf/` tree in the background. You'll see a one-line notice; the new version takes effect next session.
+
+If you're upgrading from an older single-file install, the first `/gitf` self-heals automatically — it detects the missing `flows/` and `providers/` directories and pulls the full tree.
 
 No manual update steps needed.
 

@@ -2,13 +2,24 @@
 
 ## Editing the skill
 
-All behavior lives in `gitf/SKILL.md`. Changes to flows, decision logic, or rules go there.
+The skill is split by concern:
+
+- **`gitf/SKILL.md`** — slim core (routing, decision tree, rules, state schema). No flow details, no platform commands.
+- **`gitf/flows/*.md`** — Git Flow steps as platform-agnostic coarse verbs (`LAND`, `PUBLISH`, `SYNC`, `TAG`, `CLEANUP`).
+- **`gitf/providers/*.md`** — how each verb runs on a platform. Adding a platform = one new provider file (+ at most one detector case); flows and core stay untouched. See `gitf/providers/README.md`.
+- **`gitf/gitf-detect.sh`** — capability detection. If you change its output, update `gitf/tests/test-detect.sh`.
 
 ## Testing changes
 
-Use Claude Code's `/skill-creator` to run evals against your changes:
+Detector unit tests (fast, offline):
 
-1. Edit `gitf/SKILL.md`
+```bash
+bash gitf/tests/test-detect.sh
+```
+
+Skill behavior via Claude Code's `/skill-creator`:
+
+1. Edit the relevant file under `gitf/`
 2. Invoke `/skill-creator` in Claude Code
 3. Point it at `evals/evals.json`
 4. Compare outputs before/after

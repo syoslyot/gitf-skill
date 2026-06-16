@@ -2,6 +2,31 @@
 
 This document defines the authoritative decision logic for `/gitf`. The skill must follow this exactly.
 
+## Platform detection (before state detection)
+
+`/gitf` first runs `gitf/gitf-detect.sh`, which reports platform **capability**
+(not remote-URL shape) as single-line JSON:
+
+```
+provider     = github | local
+needs_login  = gh installed but not logged in
+has_remote   = repo has any remote
+```
+
+Capability rules (evaluated in order, `platform_config=auto`):
+
+```
+1. no remote                      → provider=local
+2. gh installed AND logged in     → provider=github
+3. gh installed, NOT logged in    → provider=local, needs_login=true (stop, prompt)
+4. gh not installed               → provider=local
+```
+
+`.git/gitf-config.json` `{"platform":"github|local"}` overrides the auto result.
+The chosen provider determines how the coarse verbs (`LAND`/`PUBLISH`/`SYNC`/
+`TAG`/`CLEANUP`) are carried out. Only `github` can block and therefore writes
+`.git/gitf-state.json`; `local` lands synchronously and never writes state.
+
 ## State detection
 
 Before any decision, collect:
@@ -48,8 +73,12 @@ ahead_of_main    = git log main..develop --oneline   (commits in develop not in 
 ## Preconditions
 
 Before executing any flow, verify:
-- `gh` is installed and authenticated (`gh auth status`)
-- The repo has a remote named `origin`
-- The target base branch (`develop` or `main`) exists both locally and on remote
+- Platform detection succeeded (see above). If `needs_login=true`, stop and emit
+  the `needs-login` message instead of running a flow.
+- The target base branch (`develop` or `main`) exists locally — and on the
+  remote too when `has_remote=true`.
+
+The `github` provider additionally requires `gh` authenticated (guaranteed by
+`provider=github`). The `local` provider has no remote/`gh` precondition.
 
 If any precondition fails: stop and report clearly.

@@ -45,23 +45,30 @@ git add <version-file>
 git commit -m "chore: bump version to v<new-version>"
 ```
 
-### B-4: Land release → main
+### B-4: Code-review gate
+
+Run the shared code-review gate (`flows/code-review-gate.md`) on
+`<release-branch>` against `main..<release-branch>`. If it stops with unresolved
+findings, state is saved (`step=awaiting_code_review`) and the run halts here;
+otherwise continue to B-5.
+
+### B-5: Land release → main
 
 `PUBLISH <release-branch>` then `LAND base=main head=<release-branch> keep-branch`.
 
 `keep-branch` is required — the release branch is still needed for the
-back-merge in B-6.
+back-merge in B-7.
 
 - github: if blocked, state is saved (`step=awaiting_merge_to_main`,
   `main_pr_merged=false`) → stop.
 - local: synchronous merge into main, push main if `has_remote`.
 
-### B-5 [version only]: Tag main
+### B-6 [version only]: Tag main
 
-`TAG <new-version>` — only after main has the release commit, never before B-4,
-never after B-6.
+`TAG <new-version>` — only after main has the release commit, never before B-5,
+never after B-7.
 
-### B-6: Land release → develop (back-merge)
+### B-7: Land release → develop (back-merge)
 
 `LAND base=develop head=<release-branch>` (no `keep-branch` — done with it after).
 
@@ -70,9 +77,9 @@ never after B-6.
   (`step=awaiting_merge_to_develop`, `main_pr_merged=true`) → stop.
 - local: synchronous merge into develop, push if `has_remote`.
 
-### B-7: Cleanup
+### B-8: Cleanup
 
 `CLEANUP <release-branch>` → `SYNC develop` → delete `.gitf/state.json`
 (github) → **status-messages: flow-b-done**.
 
-**Tag ordering invariant**: always between B-4 (main has the commit) and B-6.
+**Tag ordering invariant**: always between B-5 (main has the commit) and B-7.

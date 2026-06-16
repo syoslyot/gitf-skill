@@ -58,17 +58,21 @@ Read the JSON verbatim — do **not** reason about remote URLs yourself.
 
 ## Step 0.5: Parse flags and check saved state
 
-Flag: `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`.
-`-v` only affects Flow B. Other flows ignore it.
+Flags:
+- `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`.
+  `-v` only affects Flow B. Other flows ignore it.
+- `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
+  C-2) for this run only. Default `false`.
 
-State (github provider only — local never writes state):
+State (written by **either** provider — github for PR-merge pauses, both
+providers for the code-review pause):
 
 ```bash
 cat .gitf/state.json 2>/dev/null
 ```
 
-If the file exists → load `flows/resume.md` and `providers/github.md`, then
-follow resume. If not → run detection from Step 1.
+If the file exists → load `flows/resume.md` (and `providers/<provider>.md`),
+then follow resume. If not → run detection from Step 1.
 
 ---
 
@@ -88,7 +92,7 @@ git log main..develop --oneline
 ## Decision Tree → which flow to load
 
 ```
-.gitf/state.json exists?      → flows/resume.md        (github only)
+.gitf/state.json exists?          → flows/resume.md
 
 On feature/* or fix/*             → flows/flow-a.md
 On hotfix/*                       → flows/flow-c.md
@@ -103,9 +107,10 @@ On develop
 On main                           → status-messages: warn-on-main
 ```
 
-**Routing**: once a flow is chosen, load exactly two files —
-`flows/<chosen>.md` and `providers/<provider>.md` — plus
-`flows/status-messages.md` when you need to emit a message. Load nothing else.
+**Routing**: once a flow is chosen, load `flows/<chosen>.md` and
+`providers/<provider>.md`. Additionally load `flows/status-messages.md` when you
+need to emit a message, and `flows/code-review-gate.md` when Flow B / Flow C
+reaches its code-review step (B-4 / C-2). Load nothing else.
 
 ---
 
@@ -126,10 +131,12 @@ blockable PR; local = synchronous `--no-ff` merge).
 
 ---
 
-## State file schema (github provider only)
+## State file schema
 
-Saved at `.gitf/state.json` when a PR cannot be auto-merged; deleted when
-the full flow completes (or a PR was closed without merge).
+Saved at `.gitf/state.json` when the flow must pause — a PR that cannot be
+auto-merged (github), or the code-review gate stopping with unresolved findings
+(either provider). Deleted when the full flow completes (or a PR was closed
+without merge).
 
 ```json
 {
@@ -149,8 +156,8 @@ the full flow completes (or a PR was closed without merge).
 | Field | Description |
 |-------|-------------|
 | `flow` | A / B / C |
-| `step` | `awaiting_merge` / `awaiting_merge_to_main` / `awaiting_merge_to_develop` |
-| `pr_number` | the PR currently waiting |
+| `step` | `awaiting_merge` / `awaiting_merge_to_main` / `awaiting_merge_to_develop` / `awaiting_code_review` |
+| `pr_number` | the PR currently waiting (null for `awaiting_code_review`) |
 | `source_branch` | branch that was landed |
 | `target_branch` | base branch of the waiting PR |
 | `release_branch` | (B/C) e.g. `release/2026-06-15` or `release/v1.2.0` |
@@ -176,5 +183,9 @@ the full flow completes (or a PR was closed without merge).
 - Delete release/feature/fix branches after the flow completes (local + remote).
 - github provider: check `mergeStateStatus` before `gh pr merge` — never merge
   blindly. Delete `.gitf/state.json` only when the flow is fully complete.
+- Code-review gate (B-4 / C-2) runs on the local branch before landing on main,
+  so it pauses on either provider. The reviewer tools come from `.gitf/config`;
+  judge their output — do not hardcode an "empty == pass" rule. `--skip-review`
+  bypasses it.
 - If `gh` errors or a PR creation fails, stop and report clearly.
 - Re-run detection every invocation — never assume a cached platform.

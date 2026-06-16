@@ -1,9 +1,18 @@
-# Flow Resume (github provider only)
+# Flow Resume
 
-Reached when `.gitf/state.json` exists. Only the `github` provider ever
-writes state, so resume is github-only; `local` never lands here.
+Reached when `.gitf/state.json` exists. Read the state file first and branch on
+`step`:
 
-Read the state file, then check the waiting PR:
+- `step=awaiting_code_review` → **code-review pause** (either provider). Re-enter
+  the code-review gate (`flows/code-review-gate.md`) on `release_branch` from the
+  top. If it passes, continue the owning flow: Flow B from B-5, Flow C from C-3.
+  If it stops again, state stays and the run halts. No PR is involved here.
+- any other `step` → **PR-merge pause** (github only); follow the rest of this
+  file.
+
+## PR-merge pause (github)
+
+Check the waiting PR:
 
 ```bash
 gh pr view <pr_number> --json state,mergeStateStatus,statusCheckRollup

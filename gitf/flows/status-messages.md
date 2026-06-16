@@ -68,3 +68,11 @@ gh is installed but not logged in. Two options:
 PR #<n> was closed without merging. State cleared.
 Run /gitf again to start fresh.
 ```
+
+### blocked-code-review
+```
+⏸ Code review found issues I couldn't resolve on <branch>:
+  • <finding 1>
+  • <finding 2>
+  Fix them (or re-run with /gitf --skip-review to bypass), then /gitf to continue.
+```

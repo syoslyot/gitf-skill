@@ -3,9 +3,11 @@
 Active when `gitf-detect.sh` reports `"provider":"local"` — no remote, or `gh`
 unavailable, or `.gitf/config` forces `local`.
 
-There is **no PR, no review/CI gate, no blocking**. Landing is a synchronous
-`--no-ff` merge. This provider **never** writes `.gitf/state.json` and has
-no resume path.
+There is **no PR and no CI gate**. Landing is a synchronous `--no-ff` merge and
+**never blocks**. The only time this provider writes `.gitf/state.json` is the
+code-review pause (`step=awaiting_code_review`) — when the B-4 / C-2 review gate
+stops with findings the AI could not resolve. All other steps run straight
+through with no state and no resume.
 
 Behavior of `PUBLISH`/`SYNC`/remote cleanup depends on `has_remote`:
 

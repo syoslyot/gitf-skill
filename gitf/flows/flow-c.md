@@ -5,6 +5,23 @@
 Same two-land pattern as Flow B (main first, then back-merge to develop), but
 the version is **always a patch bump** — patching production always gets a tag.
 
+### C-0: Orphan-branch guard (cache-miss)
+
+Before landing, probe for an **other** unmerged hotfix branch (exclude the one
+you are on — it is unmerged by definition):
+
+```bash
+current=$(git branch --show-current)
+git branch --list 'hotfix/*' | sed 's/^[* ] *//' | while read -r b; do
+  [ "$b" = "$current" ] && continue
+  [ -n "$(git log main.."$b" --oneline)" ] && echo "ORPHAN:$b"
+done
+```
+
+If any `ORPHAN:` printed → **halt**: tell the user another unfinished hotfix
+branch exists and to merge or delete it before running `/gitf` again. Do not
+guess.
+
 ### C-1: Patch version
 
 Detect the version file (same order as Flow B), always compute a **patch** bump.

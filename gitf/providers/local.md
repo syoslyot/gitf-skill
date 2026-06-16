@@ -75,4 +75,7 @@ git checkout develop
 git branch -d <branch> 2>/dev/null || true
 # has_remote=true: also remove it from the remote
 git push <remote> --delete <branch> 2>/dev/null || true
+# Hygiene: drop this branch's state entry so a future same-named branch
+# can never get a false cache hit.
+bash ~/.claude/skills/gitf/gitf-state.sh del "<branch>"
 ```

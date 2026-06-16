@@ -91,4 +91,7 @@ git push origin v<version>
 git push origin --delete <branch>
 git checkout develop && git pull origin develop
 git branch -d <branch> 2>/dev/null || true
+# Hygiene: drop this branch's state entry so a future same-named branch
+# can never get a false cache hit.
+bash ~/.claude/skills/gitf/gitf-state.sh del "<branch>"
 ```

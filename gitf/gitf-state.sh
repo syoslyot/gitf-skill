@@ -54,8 +54,10 @@ elif cmd == "put":
     d["flows"][sys.argv[2]] = entry
     save(d)
 elif cmd == "del":
-    d["flows"].pop(sys.argv[2], None)
-    save(d)
+    # Only write if the entry actually existed — a no-op del must not create an
+    # empty state.json for a clean flow that never paused.
+    if d["flows"].pop(sys.argv[2], None) is not None:
+        save(d)
 elif cmd == "list":
     print(json.dumps(list(d["flows"].keys())))
 PYEOF

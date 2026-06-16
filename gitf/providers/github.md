@@ -35,7 +35,10 @@ gh pr list --head <head> --base <base> --state all \
 - a `MERGED` PR exists → this land already happened; skip to the next flow step.
 - none → create the PR normally.
 
-On a **cache hit** this probe is skipped — the entry already names the PR.
+Skipped on a **PR-merge cache hit** — the entry already names the PR. On the
+**code-review cache-hit resume** the entry has `pr_number:null` and no PR exists
+yet, so this probe still applies when the flow first creates the PR (there is no
+prior PR to collide with).
 
 Decide from `mergeStateStatus`:
 

@@ -49,6 +49,11 @@ ok "bad-put → exit 1" "$?" "1"
 ok "bad-put preserves prior" "$(run get feature/keep | python3 -c 'import sys,json;print(json.load(sys.stdin)["flow"])')" "A"
 ok "bad-put wrote nothing" "$(run get feature/bad)" ""
 
+# 8. del with no existing entry is a no-op: must NOT create a state file
+rm -f "$SF"
+run del feature/never-existed
+ok "del no-op writes no file" "$([ -e "$SF" ] && echo exists || echo absent)" "absent"
+
 # ============================================================
 # valid: SHA-ancestor identity check (real temp repo)
 # ============================================================

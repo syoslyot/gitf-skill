@@ -49,6 +49,31 @@ ok "bad-put → exit 1" "$?" "1"
 ok "bad-put preserves prior" "$(run get feature/keep | python3 -c 'import sys,json;print(json.load(sys.stdin)["flow"])')" "A"
 ok "bad-put wrote nothing" "$(run get feature/bad)" ""
 
+# ============================================================
+# valid: SHA-ancestor identity check (real temp repo)
+# ============================================================
+REPO="$(mktemp -d "$SANDBOX/repo.XXXXXX")"
+(
+  cd "$REPO" && git init -q && git config user.email t@t && git config user.name t
+  git commit -q --allow-empty -m c1
+  git checkout -q -b feature/y
+  git commit -q --allow-empty -m c2
+)
+PAUSE_SHA="$(cd "$REPO" && git rev-parse feature/y)"
+# advance the branch
+( cd "$REPO" && git commit -q --allow-empty -m c3 )
+# valid: pause_sha is ancestor of advanced branch → exit 0
+( cd "$REPO" && GITF_STATE_FILE="$SF" bash "$STATE" valid feature/y "$PAUSE_SHA" ) \
+  && ok "valid: ancestor → 0" "0" "0" || ok "valid: ancestor → 0" "1" "0"
+# recreate the branch with unrelated history → pause_sha NOT ancestor → exit 1
+(
+  cd "$REPO" && git checkout -q --detach
+  git branch -q -D feature/y
+  git checkout -q -b feature/y master 2>/dev/null || git checkout -q -b feature/y main
+)
+( cd "$REPO" && GITF_STATE_FILE="$SF" bash "$STATE" valid feature/y "$PAUSE_SHA" ) \
+  && ok "valid: recreated → 1" "0" "1" || ok "valid: recreated → 1" "1" "1"
+
 echo "------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

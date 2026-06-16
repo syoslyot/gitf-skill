@@ -41,6 +41,14 @@ ok "other remains" "$(run get release/v1.0.0 | python3 -c 'import sys,json;print
 echo '{"flow":"A","step":"awaiting_merge"}' > "$SF"
 ok "non-v2 → empty get" "$(run get release/v1.0.0)" ""
 
+# 7. malformed JSON on put → non-zero exit, existing entries preserved
+rm -f "$SF"
+run put feature/keep '{"flow":"A"}'
+run put feature/bad 'not json at all' 2>/dev/null
+ok "bad-put → exit 1" "$?" "1"
+ok "bad-put preserves prior" "$(run get feature/keep | python3 -c 'import sys,json;print(json.load(sys.stdin)["flow"])')" "A"
+ok "bad-put wrote nothing" "$(run get feature/bad)" ""
+
 echo "------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

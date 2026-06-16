@@ -11,7 +11,7 @@ STATE_FILE="${GITF_STATE_FILE:-$TOPLEVEL/.gitf/state.json}"
 
 py() {
   GITF_STATE_FILE="$STATE_FILE" python3 - "$@" <<'PYEOF'
-import json, sys, os
+import json, sys, os, tempfile
 path = os.environ["GITF_STATE_FILE"]
 def load():
     try:
@@ -23,9 +23,22 @@ def load():
         pass
     return {"version": 2, "flows": {}}
 def save(d):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(d, f, indent=2)
+    # Atomic write: dump to a temp file in the same dir, then rename over the
+    # target. A crash mid-write leaves the old file intact instead of a
+    # truncated blob that load() would discard (silently wiping all entries).
+    d_dir = os.path.dirname(path)
+    os.makedirs(d_dir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d_dir, prefix=".state.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(d, f, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
 cmd = sys.argv[1]
 d = load()
 if cmd == "get":
@@ -33,7 +46,12 @@ if cmd == "get":
     if e is not None:
         print(json.dumps(e))
 elif cmd == "put":
-    d["flows"][sys.argv[2]] = json.loads(sys.argv[3])
+    try:
+        entry = json.loads(sys.argv[3])
+    except json.JSONDecodeError as e:
+        print(f"gitf-state: invalid JSON for put: {e}", file=sys.stderr)
+        sys.exit(1)
+    d["flows"][sys.argv[2]] = entry
     save(d)
 elif cmd == "del":
     d["flows"].pop(sys.argv[2], None)

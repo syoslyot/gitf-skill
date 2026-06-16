@@ -50,7 +50,17 @@ Bump type from `git log main..develop --oneline`:
 - any `feat:` → minor
 - `BREAKING CHANGE` in body → major (confirm with user first)
 
-### B-2: Create release branch
+### B-2: Create or resume the release branch
+
+Idempotency (cache-miss resume): if `<release-branch>` already exists — e.g. you
+were routed here already standing on it (`On release/* → flow-b.md`) — do **not**
+recreate it and do **not** `git checkout develop`. Just make sure you are on it:
+
+```bash
+git checkout <release-branch>
+```
+
+Otherwise (fresh release triggered from develop):
 
 ```bash
 git checkout develop && git pull   # SYNC develop first if has_remote

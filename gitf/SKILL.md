@@ -213,8 +213,11 @@ its branch is cleaned up.
   blindly. Drop a branch's state entry (via `gitf-state.sh del`) only when its
   flow is fully complete.
 - **Ambiguity halts.** On any ambiguous or unexpected state — a merge conflict,
-  an orphaned `release/*`/`hotfix/*` branch, or contradictory probe results —
-  stop and report to the user. Never guess or auto-recover.
+  or contradictory probe results — stop and report. Never guess or auto-recover.
+- **In-flight ordering** (cache-miss): starting a release (B-0) halts if any
+  unfinished `release/*` or `hotfix/*` exists; a hotfix (C-0) halts only on
+  another unfinished `hotfix/*`. Resuming a suspended branch (cache hit) is never
+  blocked by this guard.
 - State lives in `.gitf/state.json` (v2 map) accessed only via `gitf-state.sh`.
   A paused flow's entry is keyed by its owning branch and carries `pause_sha`.
 - Code-review gate (B-4 / C-2) runs on the local branch before landing on main,

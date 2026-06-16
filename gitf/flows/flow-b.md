@@ -7,19 +7,22 @@ Steps marked **[version only]** run only when `-v` was passed (`VERSION_MODE=tru
 Everything here except `LAND` is platform-independent — version detection,
 bumping, and tagging are plain git.
 
-### B-0: Orphan-branch guard (cache-miss, when triggered from develop)
+### B-0: In-flight guard (cache-miss, when triggered from develop)
 
-Before creating a release branch, probe for an existing unmerged release branch:
+A release must wait for any in-flight production change: you do not ship a release
+while a hotfix is unfinished, nor start a second release while one is open. Before
+creating a release branch, probe for an existing unmerged release **or** hotfix
+branch:
 
 ```bash
-git branch --list 'release/*' | sed 's/^[* ] *//' | while read -r b; do
-  [ -n "$(git log main.."$b" --oneline)" ] && echo "ORPHAN:$b"
+git branch --list 'release/*' 'hotfix/*' | sed 's/^[* ] *//' | while read -r b; do
+  [ -n "$(git log main.."$b" --oneline)" ] && echo "BLOCKER:$b"
 done
 ```
 
-If any `ORPHAN:` printed → **halt**: tell the user an unfinished release branch
-exists and to merge or delete it before running `/gitf` again. Do not create a
-new release branch and do not append `-2`.
+If any `BLOCKER:` printed → **halt**: tell the user an unfinished release or
+hotfix branch exists and to merge or delete it before starting a release. Do not
+create a new release branch and do not append `-2`.
 
 ### B-1: Determine release name
 

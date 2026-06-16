@@ -5,20 +5,22 @@
 Same two-land pattern as Flow B (main first, then back-merge to develop), but
 the version is **always a patch bump** — patching production always gets a tag.
 
-### C-0: Orphan-branch guard (cache-miss)
+### C-0: In-flight guard (cache-miss)
 
-Before landing, probe for an **other** unmerged hotfix branch (exclude the one
-you are on — it is unmerged by definition):
+A hotfix is the highest-priority change, so it does **not** wait for an in-flight
+release (that release will wait for this hotfix — see B-0). It only conflicts with
+**another** unfinished hotfix. Probe for an other unmerged hotfix branch (exclude
+the one you are on — it is unmerged by definition; do not probe `release/*`):
 
 ```bash
 current=$(git branch --show-current)
 git branch --list 'hotfix/*' | sed 's/^[* ] *//' | while read -r b; do
   [ "$b" = "$current" ] && continue
-  [ -n "$(git log main.."$b" --oneline)" ] && echo "ORPHAN:$b"
+  [ -n "$(git log main.."$b" --oneline)" ] && echo "BLOCKER:$b"
 done
 ```
 
-If any `ORPHAN:` printed → **halt**: tell the user another unfinished hotfix
+If any `BLOCKER:` printed → **halt**: tell the user another unfinished hotfix
 branch exists and to merge or delete it before running `/gitf` again. Do not
 guess.
 

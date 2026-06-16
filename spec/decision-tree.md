@@ -89,10 +89,17 @@ otherwise (no entry, or pause_sha no longer an ancestor → reused name)
 - If on develop with uncommitted changes that look like an in-progress release bump: ask before proceeding
 - If version bump type is ambiguous between patch and minor: default to minor
 - **Halt on ambiguity.** On any ambiguous or unexpected state during a cache-miss
-  rebuild — a merge conflict, an orphaned `release/*`/`hotfix/*` branch (unmerged
-  into main), or contradictory probe results — stop and report. Never guess or
-  auto-recover. Idempotent probing exists to safely skip completed steps, not to
-  rescue an unknown state.
+  rebuild — a merge conflict, or contradictory probe results — stop and report.
+  Never guess or auto-recover. Idempotent probing exists to safely skip completed
+  steps, not to rescue an unknown state.
+- **In-flight production-change ordering** (cache-miss B-0 / C-0). A `release` must
+  wait for every unfinished production change: starting a release from `develop`
+  halts if any `release/*` **or** `hotfix/*` branch has commits not in `main`
+  (you do not ship a release while a known bug is being hotfixed, nor open two
+  releases at once). A `hotfix` is highest priority and waits only for **another**
+  unfinished `hotfix/*`; it does not halt for an in-flight release (that release
+  will wait for the hotfix). A legitimately suspended branch resumes via its own
+  cache hit, so this guard never blocks resuming — only starting a new flow.
 
 ## Preconditions
 

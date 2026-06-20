@@ -49,5 +49,31 @@ if [ "$HAS_REMOTE" = true ]; then
   fi
 fi
 
+# ===== branch + topology =====
+CURRENT=$(git branch --show-current); [ -z "$CURRENT" ] && CURRENT=null
+HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo null)
+[ -n "$(git status --porcelain 2>/dev/null)" ] && DIRTY=true
+
+branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
+count() { git rev-list --count "$1" 2>/dev/null || echo 0; }
+
+[ "$CURRENT" = develop ] && IS_DEVELOP=true
+[ "$CURRENT" = main ] && IS_MAIN=true
+case "$CURRENT" in
+  release/*) GITF_BRANCH=release ;;
+  hotfix/*)  GITF_BRANCH=hotfix ;;
+esac
+
+if branch_exists develop && [ "$IS_DEVELOP" = false ] && [ "$HEAD" != null ]; then
+  AHEAD_OF_DEVELOP=$(count "develop..HEAD")
+  git merge-base --is-ancestor HEAD develop 2>/dev/null && MERGED_INTO_DEVELOP=true
+fi
+if [ "$HEAD" != null ] && git rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then
+  AHEAD_OF_ORIGIN=$(count '@{upstream}..HEAD')
+fi
+if branch_exists develop && branch_exists main; then
+  DEVELOP_AHEAD_OF_MAIN=$(count "main..develop")
+fi
+
 emit
 exit 0

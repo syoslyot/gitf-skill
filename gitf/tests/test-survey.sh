@@ -70,6 +70,59 @@ D="$(mktemp -d "$SANDBOX/plain.XXXXXX")"; J="$(run "$D" true true)"
 check "non-git provider"    "$J" provider local
 check "non-git has_remote"  "$J" has_remote false
 
+# --- topology helpers ---
+# repo_flow -> repo with main(c0), develop branched from main.
+repo_flow() {
+  local d; d="$(mktemp -d "$SANDBOX/flow.XXXXXX")"
+  ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t
+    git commit -q --allow-empty -m c0
+    git checkout -q -b develop )
+  echo "$d"
+}
+run_local() { ( cd "$1" && PATH="$CLEAN_BIN" bash "$SURVEY" ); }
+
+# On a topic branch (non-prefixed name) with one commit ahead of develop.
+R="$(repo_flow)"
+( cd "$R" && git checkout -q -b issue-42 && git commit -q --allow-empty -m work )
+J="$(run_local "$R")"
+check "topic current"            "$J" current issue-42
+check "topic is_develop"         "$J" is_develop false
+check "topic gitf_branch"        "$J" gitf_branch null
+check "topic ahead_of_develop"   "$J" ahead_of_develop 1
+check "topic merged_into_develop" "$J" merged_into_develop false
+
+# After --no-ff merge into develop, the same tip is an ancestor of develop.
+( cd "$R" && git checkout -q develop && git merge -q --no-ff issue-42 -m "Merge issue-42" )
+( cd "$R" && git checkout -q issue-42 )
+J="$(run_local "$R")"
+check "merged ahead_of_develop"    "$J" ahead_of_develop 0
+check "merged merged_into_develop" "$J" merged_into_develop true
+
+# On develop, ahead of main.
+R="$(repo_flow)"
+( cd "$R" && git commit -q --allow-empty -m feature-on-develop )
+J="$(run_local "$R")"
+check "develop is_develop"          "$J" is_develop true
+check "develop develop_ahead_of_main" "$J" develop_ahead_of_main 1
+
+# On a release branch -> gitf_branch=release.
+R="$(repo_flow)"
+( cd "$R" && git checkout -q -b release/v1.2.0 )
+J="$(run_local "$R")"
+check "release gitf_branch" "$J" gitf_branch release
+
+# On a hotfix branch -> gitf_branch=hotfix.
+R="$(repo_flow)"
+( cd "$R" && git checkout -q main && git checkout -q -b hotfix/urgent )
+J="$(run_local "$R")"
+check "hotfix gitf_branch" "$J" gitf_branch hotfix
+
+# Dirty working tree.
+R="$(repo_flow)"
+( cd "$R" && git checkout -q -b wip && echo x > f.txt )
+J="$(run_local "$R")"
+check "dirty true" "$J" dirty true
+
 echo "------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

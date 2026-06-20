@@ -1,19 +1,35 @@
 # Decision Tree Specification
 
-This document defines the authoritative decision logic for `/gitf`. The skill must follow this exactly.
+This document defines the authoritative decision logic for `/gitf`. The skill must
+follow this exactly. `gitf/SKILL.md` is the executable form of this spec; when the
+two disagree, `SKILL.md` wins and this document should be corrected.
 
-## Platform detection (before state detection)
+> **Stateless by design.** `/gitf` keeps **no** `.gitf/config` and **no**
+> `.gitf/state.json`. Every fact is read fresh from the live git DAG (and `gh`)
+> on each invocation; every pause point is re-derived, never stored. There is no
+> cache, no first-run setup, and no resume file. Earlier versions had all three —
+> they were removed in v2.0.0.
 
-`/gitf` first runs `gitf/gitf-detect.sh`, which reports platform **capability**
-(not remote-URL shape) as single-line JSON:
+## Facts: the single source of truth
 
+`/gitf` first runs `gitf/gitf-survey.sh`, which reads the live git DAG and
+`git worktree list` and emits **one line of JSON**. The skill reads this verbatim
+and never re-derives a fact itself:
+
+```json
+{"platform":{"provider":"github|local","needs_login":bool,"has_remote":bool,"default_remote":"origin|null"},
+ "branch":{"current":"<name>","head":"<sha>","dirty":bool},
+ "topology":{"is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null",
+   "ahead_of_develop":int,"merged_into_develop":bool,"ahead_of_origin":int,"develop_ahead_of_main":int},
+ "worktrees":{"current_path":"<abs>","main_path":"<abs>","current_is_linked":bool,
+   "develop_at":"<abs|null>","main_at":"<abs|null>"}}
 ```
-provider     = github | local
-needs_login  = gh installed but not logged in
-has_remote   = repo has any remote
-```
 
-Capability rules (evaluated in order, `platform_config=auto`):
+### Platform capability rules (computed inside the survey)
+
+Capability is a question of **what `gh` can do**, not what the remote URL looks
+like (a logged-in `gh` routes to the correct host on its own, so GitHub
+Enterprise needs no special handling):
 
 ```
 1. no remote                      → provider=local
@@ -22,90 +38,84 @@ Capability rules (evaluated in order, `platform_config=auto`):
 4. gh not installed               → provider=local
 ```
 
-`.gitf/config` `{"platform":"github|local",...}` overrides the auto result, and
-also carries `reviewers` (the ordered code-review tools). The chosen provider
-determines how the coarse verbs (`LAND`/`PUBLISH`/`SYNC`/`TAG`/`CLEANUP`) are
-carried out. `.gitf/state.json` is a **v2 branch-keyed map**
-(`{"version":2,"flows":{"<branch>":{...}}}`) accessed only via `gitf-state.sh`;
-each entry records one paused flow: a github PR that cannot auto-merge, or the
-code-review gate (B-4 / C-2) stopping with unresolved findings — the latter
-pauses on **either** provider, since the review runs on the local branch before
-landing. Entries are independent, so multiple branches can be suspended at once.
+`provider` selects which `providers/<provider>.md` is loaded once a flow is
+chosen. The `/gitf --local` flag forces `provider=local` for the run regardless
+of the surveyed value — this replaces the removed per-project platform override.
 
-## State detection
-
-Before any decision, collect:
+## Flags (Step 0.5)
 
 ```
-current_branch  = git branch --show-current
-status          = git status --short
-ahead_of_develop = git log develop..HEAD --oneline   (commits on HEAD not in develop)
-ahead_of_main    = git log main..develop --oneline   (commits in develop not in main)
+-v             VERSION_MODE=true — bump version + tag (Flow B/C tagging only)
+--skip-review  SKIP_REVIEW=true  — skip the code-review gate (B-4 / C-2) this run
+--local        force provider=local for this run
 ```
 
-## State lookup (Step 0.5, before the decision rules)
+There is no saved state to consult. Every pause point — a blocked GitHub PR, an
+unfinished release, an unresolved code review — is re-derived from `gh` and the
+git graph by the chosen flow. Flows run **idempotently**: they probe before each
+action and skip steps already done.
 
-Look up the current branch's entry and validate identity:
-
-```
-entry = gitf-state.sh get <current_branch>
-entry non-empty AND gitf-state.sh valid <current_branch> <entry.pause_sha> (exit 0)
-   → CACHE HIT  → FLOW RESUME (trust the entry; do not re-derive)
-otherwise (no entry, or pause_sha no longer an ancestor → reused name)
-   → CACHE MISS → run the decision rules below; the chosen flow runs in
-                  idempotent mode (probe git/gh before each action, halt on
-                  ambiguity).
-```
-
-## Decision rules (evaluated in order)
+## Decision rules (routed from FACTS, evaluated in order)
 
 ```
-1. current_branch matches feature/* or fix/*
-   → FLOW A
+1. topology.is_main
+   → STOP: warn user not to work directly on main
 
-2. current_branch matches hotfix/*
-   → FLOW C
-
-3. current_branch matches release/*
-   → FLOW B (resume in-progress release)
-
-4. current_branch == "develop"
-   4a. status is non-empty (uncommitted changes)
-       → FLOW D, Case 1
-   4b. ahead_of_develop is non-empty (commits on develop not yet pushed / rogue commits)
-       → FLOW D, Case 2
-   4c. ahead_of_main is non-empty (develop has releasable commits)
-       → FLOW B
-   4d. ahead_of_main is empty
+2. topology.is_develop
+   2a. branch.dirty OR topology.ahead_of_origin > 0
+       → FLOW D (rescue) → FLOW A
+   2b. topology.develop_ahead_of_main > 0
+       → FLOW B (full release)
+   2c. else
        → STOP: "develop and main are in sync, nothing to release"
 
-5. current_branch == "main"
-   → STOP: warn user not to work directly on main
+3. topology.gitf_branch == "release"
+   → FLOW B (continue an in-progress release)
+
+4. topology.gitf_branch == "hotfix"
+   → FLOW C
+
+5. else — a TOPIC branch (ANY name that is not main/develop/release/hotfix)
+   5a. topology.ahead_of_develop > 0
+       → FLOW A (land on develop)
+   5b. topology.merged_into_develop AND (branch still exists OR worktree present)
+       → FLOW A in CLEANUP-only mode (the land already happened; just clean up)
+   5c. else
+       → STOP: "nothing to do"
 ```
+
+**Topic branches are classified by topology, never by name prefix.** A branch
+called `spike-foo` with commits ahead of develop is treated exactly like
+`feature/foo`. The `feature/*` / `fix/*` convention is a recommendation, not a
+routing requirement.
 
 ## Ambiguity resolution
 
-- If both 4a and 4b are true (uncommitted changes AND rogue commits): treat as 4a (unstaged first)
-- If on develop with uncommitted changes that look like an in-progress release bump: ask before proceeding
-- If version bump type is ambiguous between patch and minor: default to minor
-- **Halt on ambiguity.** On any ambiguous or unexpected state during a cache-miss
-  rebuild — a merge conflict, or contradictory probe results — stop and report.
-  Never guess or auto-recover. Idempotent probing exists to safely skip completed
-  steps, not to rescue an unknown state.
-- **In-flight production-change ordering** (cache-miss B-0 / C-0). A `release` must
-  wait for every unfinished production change: starting a release from `develop`
-  halts if any `release/*` **or** `hotfix/*` branch has commits not in `main`
-  (you do not ship a release while a known bug is being hotfixed, nor open two
-  releases at once). A `hotfix` is highest priority and waits only for **another**
-  unfinished `hotfix/*`; it does not halt for an in-flight release (that release
-  will wait for the hotfix). A legitimately suspended branch resumes via its own
-  cache hit, so this guard never blocks resuming — only starting a new flow.
+- On develop, if both 2a conditions hold (dirty working tree **and** unpushed
+  commits), Flow D handles both in one pass — the dirty changes and the rogue
+  commits move onto the inferred branch together.
+- If a version bump type is ambiguous between patch and minor, default to minor.
+  `BREAKING CHANGE` → major, but confirm with the user first.
+- **Halt on ambiguity.** On any ambiguous or unexpected state — a merge conflict,
+  contradictory probe results, a dirty worktree blocking a cleanup — stop and
+  report. Never guess or auto-recover. Idempotent probing exists to safely skip
+  completed steps, not to rescue an unknown state.
+- **In-flight production-change ordering.** A `release` must wait for every
+  unfinished production change: starting a release from `develop` halts if any
+  `release/*` **or** `hotfix/*` branch has commits not in `main` (you do not ship
+  a release while a bug is being hotfixed, nor open two releases at once). A
+  `hotfix` is highest priority and waits only for **another** unfinished
+  `hotfix/*`; it does not halt for an in-flight release (that release will wait
+  for the hotfix). This guard is derived from `git branch` + `git log`, not from
+  stored state, so it never blocks resuming a branch you already have checked
+  out — only starting a brand-new flow.
 
 ## Preconditions
 
 Before executing any flow, verify:
-- Platform detection succeeded (see above). If `needs_login=true`, stop and emit
-  the `needs-login` message instead of running a flow.
+
+- The survey ran and produced facts. If `platform.needs_login=true`, stop and
+  emit the `needs-login` message instead of running a flow.
 - The target base branch (`develop` or `main`) exists locally — and on the
   remote too when `has_remote=true`.
 

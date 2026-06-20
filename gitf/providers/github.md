@@ -1,11 +1,12 @@
 # Provider: github
 
-Active when `gitf-detect.sh` reports `"provider":"github"` (gh installed and
+Active when the survey reports `platform.provider` = `github` (gh installed and
 logged in). All merges are **merge commits** (`--merge`). `gh` routes to the
 correct host on its own — GitHub Enterprise works with no special handling.
 
 This is the only provider that can block. When a PR cannot be auto-merged the
-flow saves a state entry (keyed by branch) and resumes later via `resume.md`.
+flow writes **no state**, emits a `blocked-*` message and stops; the next `/gitf`
+re-locates the PR via `gh pr list --head` and resumes from the graph.
 
 ---
 
@@ -22,8 +23,8 @@ gh pr create --base <base> --head <head> --title "<title>" --body "<body>"
 gh pr view <number> --json state,mergeStateStatus,statusCheckRollup
 ```
 
-**Idempotency probe (cache-miss runs only).** Before `gh pr create`, check for an
-existing PR for this exact head→base:
+**Idempotency probe.** Before `gh pr create`, check for an existing PR for this
+exact head→base:
 
 ```bash
 gh pr list --head <head> --base <base> --state all \
@@ -31,14 +32,13 @@ gh pr list --head <head> --base <base> --state all \
 ```
 
 - an `OPEN` PR exists → skip `gh pr create`; reuse that PR number and check its
-  `mergeStateStatus` (same as resume).
+  `mergeStateStatus`.
 - a `MERGED` PR exists → this land already happened; skip to the next flow step.
+- a `CLOSED`-unmerged PR → treat as a fresh start; create the PR.
 - none → create the PR normally.
 
-Skipped on a **PR-merge cache hit** — the entry already names the PR. On the
-**code-review cache-hit resume** the entry has `pr_number:null` and no PR exists
-yet, so this probe still applies when the flow first creates the PR (there is no
-prior PR to collide with).
+This probe is how a re-run re-locates a previously blocked PR — there is no saved
+state to consult.
 
 Decide from `mergeStateStatus`:
 
@@ -61,10 +61,12 @@ gh pr merge <number> --merge
 `keep-branch` is passed by flows that still need `head` after this LAND
 (e.g. a release branch that must also back-merge into develop).
 
-When blocked, report the blocking `mergeStateStatus` and the PR number back to
-the flow. **The flow writes the state entry** (keyed by its branch, via
-`gitf-state.sh put` — see flow-a/b/c), then emits the matching `blocked-*`
-status message and stops. The provider itself does not touch `.gitf/state.json`.
+When blocked, report the blocking `mergeStateStatus` and the PR number to the
+flow, emit the matching `blocked-*` status message, and stop. **No state is
+written.** On the next `/gitf`, the flow re-locates this PR with
+`gh pr list --head <head> --base <base> --state all --json number,state,mergeStateStatus`
+and continues from the graph: an `OPEN` PR is re-checked, a `MERGED` PR advances
+to the next step, a `CLOSED`-unmerged PR is treated as a fresh start.
 
 ## PUBLISH branch
 
@@ -91,10 +93,18 @@ git push origin v<version>
 ## CLEANUP branch
 
 ```bash
-git push origin --delete <branch>
-git checkout develop && git pull origin develop
+git push origin --delete <branch> 2>/dev/null || true
+
+# Remove the branch's worktree first if it has one (no --force: dirty => halt).
+wt=$(git worktree list --porcelain | awk -v b="refs/heads/<branch>" '
+  /^worktree /{p=$2} $0=="branch "b{print p}')
+if [ -n "$wt" ]; then
+  cd <main_path>
+  git worktree remove "$wt" || { echo "GITF_HALT: worktree $wt not clean"; exit 0; }
+fi
+
 git branch -d <branch> 2>/dev/null || true
-# Hygiene: drop this branch's state entry so a future same-named branch
-# can never get a false cache hit.
-bash ~/.claude/skills/gitf/gitf-state.sh del "<branch>"
+git worktree prune
 ```
+
+If `GITF_HALT` printed, stop and tell the user the worktree is not clean.

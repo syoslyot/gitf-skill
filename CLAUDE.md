@@ -32,6 +32,15 @@ Run the survey tests directly: `bash gitf/tests/test-survey.sh` (pure-local, no 
 
 To test skill behavior, use `/skill-creator` in Claude Code — it reads `evals/evals.json` and runs subagents against the skill. Workspace outputs go in `gitf-workspace/` (gitignored).
 
+## Versioning — two files, keep them in sync
+
+Because this project *is* the skill, two version numbers exist and must always match:
+
+- `VERSION` (repo root) — the project version. This is what `/gitf -v` (flow-b B-1) auto-detects and bumps; it is the standard project version file.
+- `gitf/.version` — the **shipped** skill version. `gitf-update.sh` fetches this from `main` and compares it against the installed copy to decide whether to self-update users. It must live inside `gitf/` so it ships with the skill.
+
+`/gitf -v` only bumps `VERSION`; it does **not** touch `gitf/.version` (B-1 does not know about it, and adding it there would leak a self-only special case into the shipped detection logic). **So whenever the version changes, edit BOTH files to the same value in the same commit.** Forgetting `gitf/.version` means users never receive the update; forgetting `VERSION` leaves the project version stale. The git tag (`vX.Y.Z`) must also match.
+
 ## Git Flow for this repo
 
 Branch rules:

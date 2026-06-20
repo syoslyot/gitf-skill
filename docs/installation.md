@@ -8,7 +8,7 @@
   it, `/gitf` uses PRs (review/CI aware); without it (or with no remote), it falls
   back to synchronous local merges.
 - Optional: a code-review skill (e.g. `/code-review`) for the pre-release review
-  gate — selected on first run.
+  gate — detected live each run, no setup needed.
 
 ## Install
 
@@ -30,9 +30,9 @@ ls ~/.claude/skills/gitf/
 In any Claude Code session, type `/gitf`. The skill appears in the autocomplete
 list once installed.
 
-The first run in a project performs a one-time setup: it detects your available
-review tools, asks which to use for the pre-release code-review gate, and writes
-`.gitf/config` (and adds `.gitf/` to `.gitignore`). Later runs skip setup.
+There is no setup step and no config file. `/gitf` reads everything it needs from
+the git repo on each run — platform capability, branch topology, and (for the
+code-review gate) whichever review tool is available. Just run it.
 
 ## Uninstall
 

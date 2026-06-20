@@ -22,8 +22,8 @@ Use `<remote>` = the detector's `default_remote`.
 
 ## LAND base head [keep-branch]
 
-**Idempotency probe (cache-miss runs only).** If `git log <base>..<head>` is empty,
-`<head>` is already merged into `<base>` — skip the merge, go to the next step.
+**Idempotency probe.** If `git log <base>..<head>` is empty, `<head>` is already
+merged into `<base>` — skip the merge, go to the next step.
 
 The merge must happen in the worktree that holds `<base>`. Use survey facts:
 
@@ -67,7 +67,7 @@ git checkout <branch> && git pull <remote> <branch>
 
 ## TAG version
 
-Idempotency (cache-miss runs): skip if the tag already exists
+Idempotency (re-run): skip if the tag already exists
 (`git tag -l v<version>` is non-empty).
 
 ```bash

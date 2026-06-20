@@ -82,7 +82,7 @@ git checkout <branch> && git pull origin <branch>
 
 ## TAG version
 
-Idempotency (cache-miss runs): skip if the tag already exists
+Idempotency (re-run): skip if the tag already exists
 (`git tag -l v<version>` is non-empty).
 
 ```bash

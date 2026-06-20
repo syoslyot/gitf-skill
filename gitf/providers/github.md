@@ -92,9 +92,9 @@ git push origin v<version>
 
 ## CLEANUP branch
 
-```bash
-git push origin --delete <branch> 2>/dev/null || true
+Order matches the spec: worktree remove → `branch -d` → remote delete → prune.
 
+```bash
 # Remove the branch's worktree first if it has one (no --force: dirty => halt).
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/<branch>" '
   /^worktree /{p=$2} $0=="branch "b{print p}')
@@ -104,6 +104,7 @@ if [ -n "$wt" ]; then
 fi
 
 git branch -d <branch> 2>/dev/null || true
+git push origin --delete <branch> 2>/dev/null || true
 git worktree prune
 ```
 

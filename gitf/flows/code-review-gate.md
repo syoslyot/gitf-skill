@@ -8,15 +8,17 @@ exist yet.
 
 - `<branch>` — the current `release/*` or `hotfix/*` branch.
 - `SKIP_REVIEW` — from `/gitf --skip-review`.
-- `.gitf/config` → `reviewers`: ordered list of review tools to run.
+- Reviewers — detected live this run, in preference order, keeping those that
+  exist: (1) `code-review` skill/plugin, (2) `superpowers:requesting-code-review`,
+  (3) `review` skill. `ls ~/.claude/skills/ 2>/dev/null` plus the session's
+  visible skill list. Use the single highest-preference one by default.
 
 ## Procedure
 
 ```
 IF SKIP_REVIEW=true → skip the gate, continue to the next flow step.
 
-Read reviewers from .gitf/config.
-IF reviewers is empty / missing → skip the gate, continue.
+Detect reviewers (above). IF none are available → skip the gate, continue.
 
 FOR each reviewer in order:
   Invoke that review tool on the diff main..<branch>.
@@ -30,22 +32,16 @@ FOR each reviewer in order:
     Fix them, commit to <branch>, then re-run THIS SAME reviewer.
 
   IF blocking findings needing the user (can't fix / design decision):
-    Capture the pause point and write the entry keyed by <branch>:
-    ```bash
-    pause_sha=$(git rev-parse "<branch>")
-    bash ~/.claude/skills/gitf/gitf-state.sh put "<branch>" \
-      '{"flow":"<B|C>","step":"awaiting_code_review","pr_number":null,"source_branch":"<branch>","target_branch":"main","release_branch":"<branch>","version":<version-or-null>,"version_mode":<true|false>,"main_pr_merged":false,"develop_pr_number":null,"pause_sha":"'"$pause_sha"'"}'
-    ```
-    <branch> is the release/* branch (Flow B) or the hotfix/* branch (Flow C);
-    resume reads release_branch from there. Schema is in SKILL.md.
-    Emit status-messages: blocked-code-review listing the remaining findings.
-    STOP.
+    Emit status-messages: blocked-code-review listing the remaining findings, and
+    STOP. No state is written. On the next `/gitf`, routing lands back on this
+    release/* (or hotfix/*) branch and re-enters this gate from the top
+    (idempotent): resolved findings pass, unresolved ones stop again.
 
 When every reviewer passes → continue to the next flow step.
 ```
 
 ## Resume
 
-On `step=awaiting_code_review` the next `/gitf` re-enters this gate from the top
-(re-running every reviewer). Only once the gate passes does the flow proceed to
-landing on `main`.
+There is no saved state. Re-running `/gitf` on a release/* or hotfix/* branch that
+has not yet landed on `main` re-enters this gate from the top and re-runs every
+reviewer. Only once the gate passes does the flow proceed to landing on `main`.

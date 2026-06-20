@@ -41,7 +41,7 @@ develop and main are already in sync — nothing to release.
 ```
 gh is installed but not logged in. Two options:
   • Run `gh auth login`, then /gitf again — uses PRs (review/CI aware).
-  • Set .gitf/config to {"platform":"local"} — pure local merges, no PRs.
+  • Run /gitf --local — pure local merges for this run, no PRs.
 ```
 
 ### blocked-review
@@ -65,8 +65,8 @@ gh is installed but not logged in. Two options:
 
 ### pr-closed
 ```
-PR #<n> was closed without merging. State cleared.
-Run /gitf again to start fresh.
+PR #<n> was closed without merging.
+Run /gitf again to start fresh — position is re-derived from git.
 ```
 
 ### blocked-code-review

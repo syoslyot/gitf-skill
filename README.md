@@ -38,7 +38,7 @@ That's it.
 
 | Your current state | What /gitf does |
 |-------------------|-----------------|
-| On `feature/*` or `fix/*` | Land on develop (PR or local merge) → sync |
+| On a topic branch (`feature/*`, `fix/*`, or **any** name that isn't main/develop/release/hotfix) | Land on develop (PR or local merge) → sync. Branches are classified by topology — commits ahead of develop — not by name prefix |
 | On `hotfix/*` | Land on main → tag → back-merge to develop → sync |
 | On `develop`, ahead of `main` | Full release: branch → bump version → land on main → tag → back-merge → clean up |
 | On `develop`, AI committed here by mistake | Detects rogue commits, creates a branch from context, moves them over, then proceeds |
@@ -56,17 +56,21 @@ That's it.
 | A remote but no usable `gh` | Local `--no-ff` merges, then pushes the updated branch |
 | No remote at all | Pure local `--no-ff` merges |
 
-Detection asks a simple question — *is `gh` installed and logged in?* — not *what does the remote URL look like*. A logged-in `gh` routes to the right host on its own, so **GitHub Enterprise works with no special configuration**. To force a mode, set `{"platform":"local"}` (or `"github"`) in `.gitf/config`.
+Detection asks a simple question — *is `gh` installed and logged in?* — not *what does the remote URL look like*. A logged-in `gh` routes to the right host on its own, so **GitHub Enterprise works with no special configuration**. To force local-merge mode regardless of a GitHub remote, pass `/gitf --local`.
 
 ---
 
-## Branch protection aware
+## Branch protection aware — and stateless
 
-If your repo has branch protection rules that require a review or waiting on CI, `/gitf` doesn't fail — it pauses. It saves its current progress to `.gitf/state.json` and tells you what's blocking.
+If your repo has branch protection rules that require a review or waiting on CI, `/gitf` doesn't fail — it pauses. It tells you what's blocking and stops, **without writing any state files**.
 
-Once the review is approved or CI passes, run `/gitf` again. It reads the saved state and picks up exactly where it left off.
+Once the review is approved or CI passes, run `/gitf` again. It re-derives exactly where it left off from the git graph and the PR's live status on GitHub (`gh pr list --head …`) — there is no saved state to go stale or fall out of sync with reality. Because position is read from the graph rather than a stored cursor, several branches can sit paused at once; `/gitf` always resumes whichever branch you currently have checked out.
 
-The same pause/resume mechanism backs the **pre-release code-review gate**: before a release or hotfix lands on `main`, `/gitf` runs your configured review tool (chosen on first run, stored in `.gitf/config`). It auto-fixes what it can, and if anything needs your judgment it pauses with the findings. Fix them and run `/gitf` again, or bypass once with `/gitf --skip-review`.
+The same stop/resume behavior backs the **pre-release code-review gate**: before a release or hotfix lands on `main`, `/gitf` detects an available review tool (e.g. `/code-review`) live and runs it on the branch. It auto-fixes what it can, and if anything needs your judgment it stops with the findings. Fix them and run `/gitf` again, or bypass once with `/gitf --skip-review`.
+
+## Works under git worktrees
+
+`/gitf` reads its facts from the live git DAG and `git worktree list`, so it behaves correctly when `develop`, `main`, or a `release/*` branch is checked out in a **linked worktree** rather than the main one. Landing and cleanup remove the right worktree before deleting a branch, and never operate on a dirty worktree — they halt and tell you instead.
 
 ---
 
@@ -146,4 +150,4 @@ develop    ──●─●──●──●──●──●──●──●
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
-The full behavioral spec lives in [`spec/`](spec/) — start there if you're adding a new flow or changing decision logic.
+For the design and the reasoning behind it (stateless, graph-as-source-of-truth, the layer split), read [`docs/architecture.md`](docs/architecture.md). The authoritative behavioral spec lives in [`spec/`](spec/) — start there if you're adding a new flow or changing decision logic.

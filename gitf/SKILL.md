@@ -1,6 +1,6 @@
 ---
 name: gitf
-description: "Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and current branch state, then executes the appropriate flow end-to-end: feature/fix to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. On GitHub it uses PRs and, if branch protection blocks auto-merge, saves state to .gitf/state.json and resumes on the next /gitf call. With no remote or no gh it falls back to local merges."
+description: "Personal Git Flow automation — invoke with /gitf to automatically handle the entire Git Flow lifecycle. Use this skill whenever the user types /gitf or /gitf -v. Detects platform capabilities (GitHub via gh, or pure-local git) and routes by git topology, then executes the appropriate flow end-to-end: any topic branch to develop, or full release to main. Default /gitf releases without version bump or tag; /gitf -v bumps version and creates a git tag. Fully automatic — lands branches, tags, cleans up, without waiting for confirmation. Works under git worktrees. On GitHub it uses PRs and, if branch protection blocks auto-merge, it writes no state — the next /gitf call re-derives position from the git graph and gh and resumes. With no remote or no gh (or /gitf --local) it falls back to local merges."
 ---
 
 # /gitf — Personal Git Flow Automation
@@ -8,9 +8,9 @@ description: "Personal Git Flow automation — invoke with /gitf to automaticall
 Fully automatic Git Flow. **Detect capabilities + state → load one flow + one
 provider → execute end-to-end without pausing.**
 
-This file is the slim core: bootstrap, detection, routing, state schema, rules.
-It contains no flow step details and no platform commands — those live in the
-files it tells you to load.
+This file is the slim core: bootstrap, the facts survey, routing, rules. It
+contains no flow step details and no platform commands — those live in the files
+it tells you to load.
 
 ---
 
@@ -27,113 +27,79 @@ Then verify the multi-file layout exists (an old single-file install won't have
 it):
 
 ```bash
-ls ~/.claude/skills/gitf/flows/ ~/.claude/skills/gitf/providers/ >/dev/null 2>&1 \
-  || echo "GITF_NEEDS_HEAL"
+ls ~/.claude/skills/gitf/flows/ ~/.claude/skills/gitf/providers/ \
+   ~/.claude/skills/gitf/gitf-survey.sh >/dev/null 2>&1 || echo "GITF_NEEDS_HEAL"
 ```
 
 If `GITF_NEEDS_HEAL` printed → run `gitf-update.sh` once more to pull the full
 tree before proceeding.
 
-Then check whether this project has been configured:
-
-```bash
-[ -f .gitf/config ] || echo "GITF_NOT_CONFIGURED"
-```
-
-If `GITF_NOT_CONFIGURED` printed → load `INSTALL.md`, run the one-time setup, and
-only then continue. If `.gitf/config` already exists, never read `INSTALL.md`.
-
 ---
 
-## Step 0: Detect platform capabilities
+## Step 0: Gather facts (single source of truth)
 
 ```bash
-bash ~/.claude/skills/gitf/gitf-detect.sh
+bash ~/.claude/skills/gitf/gitf-survey.sh
 ```
 
-Read the JSON verbatim — do **not** reason about remote URLs yourself.
+Read the JSON verbatim — do **not** re-derive any fact yourself.
 
 ```json
-{"provider":"github|local","needs_login":bool,"has_remote":bool,
- "default_remote":"origin","gh_installed":bool,"gh_logged_in":bool,"platform_config":"auto"}
+{"platform":{"provider":"github|local","needs_login":bool,"has_remote":bool,"default_remote":"origin|null"},
+ "branch":{"current":"<name>","head":"<sha>","dirty":bool},
+ "topology":{"is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null",
+   "ahead_of_develop":int,"merged_into_develop":bool,"ahead_of_origin":int,"develop_ahead_of_main":int},
+ "worktrees":{"current_path":"<abs>","main_path":"<abs>","current_is_linked":bool,
+   "develop_at":"<abs|null>","main_at":"<abs|null>"}}
 ```
 
-- `needs_login=true` → emit **status-messages: needs-login** and stop. (gh is
-  installed but not logged in; the user logs in or sets `platform:local`.)
-- Otherwise the chosen `provider` is `github` or `local`. You will load
-  `providers/<provider>.md` once a flow is selected.
+- `platform.needs_login=true` → emit **status-messages: needs-login** and stop
+  (gh installed but not logged in; the user logs in, or passes `/gitf --local`).
+- `platform.provider` selects which `providers/<provider>.md` you load once a flow
+  is chosen. `/gitf --local` forces `provider=local` for this run regardless of
+  the surveyed provider.
 
 ---
 
-## Step 0.5: Parse flags and check saved state
+## Step 0.5: Parse flags
 
-Flags:
-- `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`.
-  `-v` only affects Flow B. Other flows ignore it.
+- `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`. `-v` only
+  affects Flow B/C tagging.
 - `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
-  C-2) for this run only. Default `false`.
+  C-2) for this run only.
+- `/gitf --local` → force the `local` provider for this run (override a GitHub
+  remote). Replaces the old `.gitf/config` `platform:"local"` setting.
 
-State is a branch-keyed map (written by **either** provider — github for
-PR-merge pauses, both providers for the code-review pause). Look it up by the
-current branch (cache hit / miss):
-
-```bash
-current=$(git branch --show-current)
-entry=$(bash ~/.claude/skills/gitf/gitf-state.sh get "$current")
-```
-
-- **`entry` non-empty** → read its `pause_sha` and validate identity:
-
-  ```bash
-  bash ~/.claude/skills/gitf/gitf-state.sh valid "$current" "<pause_sha>"
-  ```
-
-  - exit 0 → **CACHE HIT**: load `flows/resume.md` (and `providers/<provider>.md`)
-    and resume this entry. Do not re-derive anything from git/gh beyond what
-    resume needs.
-  - exit 1 → reused branch name (the paused tip is no longer an ancestor); treat
-    as **CACHE MISS**.
-
-- **`entry` empty** → **CACHE MISS**: run detection from Step 1; the chosen flow
-  executes in idempotent mode (probe git/gh before each action; see each flow).
+There is no saved state to consult: every pause point (a blocked GitHub PR, an
+unfinished release, an unresolved review) is re-derived from `gh` and the git
+graph by the chosen flow. Flows run idempotently — they probe before each action.
 
 ---
 
-## Step 1: Detect current branch state
-
-Run in parallel:
-
-```bash
-git branch --show-current
-git status --short
-git log develop..HEAD --oneline
-git log main..develop --oneline
-```
-
----
-
-## Decision Tree → which flow to load
+## Decision Tree → which flow to load (routes from FACTS)
 
 ```
-Step 0.5 cache hit?               → flows/resume.md
+topology.is_main                              → status-messages: warn-on-main
 
-On feature/* or fix/*             → flows/flow-a.md
-On hotfix/*                       → flows/flow-c.md
-On release/*                      → flows/flow-b.md   (resume mid-release)
+topology.is_develop:
+  branch.dirty || topology.ahead_of_origin>0  → flows/flow-d.md → flow-a
+  topology.develop_ahead_of_main>0            → flows/flow-b.md  (full release)
+  else                                        → status-messages: nothing-to-do
 
-On develop
-├── uncommitted changes           → flows/flow-d.md  (Case 1) → flow-a
-├── commits ahead of origin/dev   → flows/flow-d.md  (Case 2) → flow-a
-├── develop ahead of main         → flows/flow-b.md  (full release)
-└── develop == main               → status-messages: nothing-to-do
+topology.gitf_branch == "release"             → flows/flow-b.md  (continue release)
+topology.gitf_branch == "hotfix"              → flows/flow-c.md
 
-On main                           → status-messages: warn-on-main
+else  (TOPIC branch — any name; not develop/main/release/hotfix):
+  topology.ahead_of_develop>0                 → flows/flow-a.md
+  topology.merged_into_develop
+    && (branch still exists || worktree present) → flows/flow-a.md (CLEANUP only)
+  else                                        → status-messages: nothing-to-do
 ```
 
-**Routing**: once a flow is chosen, load `flows/<chosen>.md` and
-`providers/<provider>.md`. Additionally load `flows/status-messages.md` when you
-need to emit a message, and `flows/code-review-gate.md` when Flow B / Flow C
-reaches its code-review step (B-4 / C-2). Load nothing else.
+**Routing**: load `flows/<chosen>.md` and `providers/<provider>.md`. Additionally
+load `flows/status-messages.md` to emit a message, and `flows/code-review-gate.md`
+when Flow B/C reaches B-4 / C-2. Load nothing else. Topic branches are classified
+by topology, never by name prefix.
 
 ---
 
@@ -154,48 +120,6 @@ blockable PR; local = synchronous `--no-ff` merge).
 
 ---
 
-## State file schema (v2)
-
-`.gitf/state.json` is a branch-keyed map. Each paused flow is one entry; flows on
-different branches are independent. Read/write it **only** via `gitf-state.sh`
-(get/put/del/list/valid) — never hand-edit the JSON.
-
-```json
-{
-  "version": 2,
-  "flows": {
-    "feature/auth-jwt": {
-      "flow": "A", "step": "awaiting_merge", "pr_number": 3,
-      "source_branch": "feature/auth-jwt", "target_branch": "develop",
-      "release_branch": null, "version": null, "version_mode": false,
-      "main_pr_merged": false, "develop_pr_number": null,
-      "pause_sha": "a1b2c3d"
-    }
-  }
-}
-```
-
-An entry is written on pause — a PR that cannot be auto-merged (github), or the
-code-review gate stopping with unresolved findings (either provider). The entry
-is deleted when its flow completes, when its PR was closed without merge, or when
-its branch is cleaned up.
-
-| Field | Description |
-|-------|-------------|
-| `flow` | A / B / C |
-| `step` | `awaiting_merge` / `awaiting_merge_to_main` / `awaiting_merge_to_develop` / `awaiting_code_review` |
-| `pr_number` | the PR currently waiting (null for `awaiting_code_review`) |
-| `source_branch` | branch that was landed |
-| `target_branch` | base branch of the waiting PR |
-| `release_branch` | (B/C) the release/* or (C) hotfix/* branch under review/merge — also the branch the `awaiting_code_review` resume re-reviews |
-| `version` | (B/C, version mode) version string |
-| `version_mode` | whether `-v` was passed — drives tagging on resume |
-| `main_pr_merged` | (B) whether release→main is done |
-| `develop_pr_number` | (B) back-merge PR number once created |
-| `pause_sha` | branch tip at pause time; resume trusts the entry only if this is an ancestor of the current branch |
-
----
-
 ## Rules
 
 - **This skill runs ONLY when the user explicitly types `/gitf` or `/gitf -v`.**
@@ -210,19 +134,15 @@ its branch is cleaned up.
   current branch may be `main`).
 - Delete release/feature/fix branches after the flow completes (local + remote).
 - github provider: check `mergeStateStatus` before `gh pr merge` — never merge
-  blindly. Drop a branch's state entry (via `gitf-state.sh del`) only when its
-  flow is fully complete.
+  blindly.
 - **Ambiguity halts.** On any ambiguous or unexpected state — a merge conflict,
   or contradictory probe results — stop and report. Never guess or auto-recover.
-- **In-flight ordering** (cache-miss): starting a release (B-0) halts if any
-  unfinished `release/*` or `hotfix/*` exists; a hotfix (C-0) halts only on
-  another unfinished `hotfix/*`. Resuming a suspended branch (cache hit) is never
-  blocked by this guard.
-- State lives in `.gitf/state.json` (v2 map) accessed only via `gitf-state.sh`.
-  A paused flow's entry is keyed by its owning branch and carries `pause_sha`.
+- **In-flight ordering**: starting a release (B-0) halts if any unfinished
+  `release/*` or `hotfix/*` exists; a hotfix (C-0) halts only on another
+  unfinished `hotfix/*`. Derived from git branches, not stored state.
 - Code-review gate (B-4 / C-2) runs on the local branch before landing on main,
-  so it pauses on either provider. The reviewer tools come from `.gitf/config`;
-  judge their output — do not hardcode an "empty == pass" rule. `--skip-review`
-  bypasses it.
+  so it pauses on either provider. The reviewer tools are detected live (see
+  code-review-gate.md); judge their output — do not hardcode an "empty == pass"
+  rule. `--skip-review` bypasses it.
 - If `gh` errors or a PR creation fails, stop and report clearly.
 - Re-run detection every invocation — never assume a cached platform.

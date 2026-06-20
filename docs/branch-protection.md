@@ -25,7 +25,7 @@ If you enable **required reviews** or **required status checks**, `gh pr merge` 
 
 ## Setup (GitHub web UI)
 
-1. Go to `github.com/<you>/git-flow-skill` → **Settings** → **Branches**
+1. Go to `github.com/<you>/gitf-skill` → **Settings** → **Branches**
 2. Click **Add branch ruleset** (or **Add rule** on older UI)
 3. Branch name pattern: `main`
 4. Enable: **Require a pull request before merging**, set approvals to 0

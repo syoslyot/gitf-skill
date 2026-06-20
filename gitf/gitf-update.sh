@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="syoslyot/git-flow-skill"
+REPO="syoslyot/gitf-skill"
 INSTALL_DIR="$HOME/.claude/skills/gitf"
 CHECK_INTERVAL=604800  # 7 days
 LAST_CHECK_FILE="/tmp/gitf-last-check"

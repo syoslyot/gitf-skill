@@ -1,4 +1,4 @@
-# git-flow-skill
+# gitf-skill
 
 > A Claude Code skill that turns Git Flow into a single command.
 

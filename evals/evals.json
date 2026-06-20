@@ -4,67 +4,85 @@
     {
       "id": 1,
       "prompt": "I'm on branch feature/auth-jwt. I've committed the JWT authentication implementation. Run /gitf.",
-      "expected_output": "Pushes feature/auth-jwt, creates PR targeting develop, checks mergeStateStatus, merges with merge commit, checks out develop, pulls latest. Reports which branch was merged and that develop is now up to date.",
+      "expected_output": "Surveys facts (gitf-survey.sh): topic branch, ahead_of_develop>0 → FLOW A. Pushes feature/auth-jwt, creates PR targeting develop, checks mergeStateStatus, merges with merge commit, syncs develop, runs CLEANUP. Reports which branch was merged and that develop is now up to date.",
       "files": []
     },
     {
       "id": 2,
       "prompt": "I'm on the develop branch. I've been committing directly to develop by mistake — there are 3 commits here that should be on a feature branch. The commits are about adding a dark mode toggle to the settings page. Run /gitf.",
-      "expected_output": "Detects rogue commits on develop. Creates a new branch named something like feature/settings-dark-mode based on commit messages. Moves the commits there using reset --hard on develop and checking out the new branch. Then proceeds with FLOW A: PR to develop, merge, pull.",
+      "expected_output": "Survey reports is_develop=true with commits ahead of origin → routes to flow-d → flow-a. Creates a new branch named something like feature/settings-dark-mode based on commit messages. Moves the commits there using reset --hard on develop and checking out the new branch. Then proceeds with FLOW A: PR to develop, merge, sync.",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "I'm on develop. The branch is clean (no uncommitted changes). develop has 5 commits that aren't in main yet — a new search feature and a couple of bug fixes. The current version is 1.3.2. Run /gitf.",
-      "expected_output": "Detects develop is ahead of main. Determines version bump (minor, because there's a new feature) → new version is 1.4.0. Creates release/v1.4.0 from develop. Bumps version in the version file. Checks mergeStateStatus before merging. PRs release to main, merges it. Tags v1.4.0 on main. PRs release to develop (back-merge), merges it. Deletes release branch local and remote. Pulls main and develop. Reports the full release summary.",
+      "prompt": "I'm on develop. The branch is clean (no uncommitted changes). develop has 5 commits that aren't in main yet — a new search feature and a couple of bug fixes. The current version is 1.3.2. Run /gitf -v.",
+      "expected_output": "Survey reports is_develop=true, develop_ahead_of_main>0 → FLOW B. Determines version bump (minor, because there's a new feature) → new version is 1.4.0. Creates release/v1.4.0 from develop. Bumps version in the version file. Checks mergeStateStatus before merging. PRs release to main, merges it. Tags v1.4.0 on main. PRs release to develop (back-merge), merges it. Deletes release branch local and remote. Syncs main and develop. Reports the full release summary.",
       "files": []
     },
     {
       "id": 4,
-      "prompt": "I'm on feature/payment-stripe. I previously ran /gitf and it created PR #7 to develop, but the repo requires a reviewer before merge. The branch-keyed state file .gitf/state.json has an entry under \"feature/payment-stripe\" with flow=A, step=awaiting_merge, pr_number=7, and a pause_sha matching this branch's tip. A teammate approved and the PR was merged on GitHub. I run /gitf again.",
-      "expected_output": "Step 0.5 looks up the current branch (feature/payment-stripe) via gitf-state.sh get. An entry exists; gitf-state.sh valid confirms pause_sha is an ancestor of the current tip → CACHE HIT. Loads resume.md. Checks PR #7 — state=MERGED. Pulls develop. Drops the feature/payment-stripe entry via gitf-state.sh del (does not hand-edit the JSON). Reports the flow is complete and develop is up to date.",
+      "prompt": "I'm on feature/payment-stripe. I previously ran /gitf and it created PR #7 to develop, but the repo requires a reviewer before merge, so /gitf reported the PR blocked and stopped. A teammate approved and the PR was merged on GitHub. I run /gitf again.",
+      "expected_output": "No state file is consulted. Survey reports merged_into_develop=true with the branch still present (the prior run never cleaned up) → FLOW A cleanup-only path. The github provider re-locates the PR via gh pr list --head feature/payment-stripe --base develop --state all, sees state=MERGED, syncs develop, and runs CLEANUP (delete branch, remove any worktree). Reports the flow is complete and develop is up to date. Position is derived from the graph + gh, never from a stored entry.",
       "files": []
     },
     {
       "id": 5,
-      "prompt": "I'm on release/v2.1.1. develop had 3 bug-fix commits ahead of main (was version 2.1.0). I previously ran /gitf -v; it created release/v2.1.1, bumped the version, and opened PR #9 to main, but required status checks were still running, so .gitf/state.json has an entry under \"release/v2.1.1\" with flow=B, step=awaiting_merge_to_main, pr_number=9, version=2.1.1, version_mode=true, and a matching pause_sha. CI has now passed and PR #9 was merged. I run /gitf.",
-      "expected_output": "Step 0.5 looks up release/v2.1.1, validates pause_sha (CACHE HIT), loads resume.md. Checks PR #9 — state=MERGED. Pulls main, creates annotated tag v2.1.1 (version_mode=true), pushes the tag. Creates the back-merge PR (release/v2.1.1 → develop, with --head). Checks mergeStateStatus; if CLEAN, merges, pulls develop, CLEANUP deletes the release branch local and remote, drops the release/v2.1.1 entry. Reports the full release summary.",
+      "prompt": "I'm on release/v2.1.1. develop had 3 bug-fix commits ahead of main (was version 2.1.0). I previously ran /gitf -v; it created release/v2.1.1, bumped the version, and opened PR #9 to main, but required status checks were still running, so /gitf reported it blocked and stopped. CI has now passed and PR #9 was merged. I run /gitf.",
+      "expected_output": "Survey reports gitf_branch=release → FLOW B (continue release). No state exists, so version_mode/version are inferred from the branch name: release/v2.1.1 → version_mode=true, version=2.1.1. The B-5 land-to-main step re-locates the PR via gh pr list --head release/v2.1.1 --base main --state all, sees MERGED → advances. Syncs main, creates annotated tag v2.1.1, pushes the tag. Creates the back-merge PR (release/v2.1.1 → develop, with --head). Checks mergeStateStatus; if CLEAN, merges, syncs develop, CLEANUP deletes the release branch local and remote (and any worktree). Reports the full release summary.",
       "files": []
     },
     {
       "id": 6,
-      "prompt": "I have two suspended /gitf flows recorded in .gitf/state.json: an entry under \"feature/auth-jwt\" (flow=A, awaiting_merge, PR #3) and an entry under \"feature/search\" (flow=A, awaiting_merge, PR #5), each with its own pause_sha. I'm currently checked out on feature/search and PR #5 was just merged on GitHub. I run /gitf.",
-      "expected_output": "Resume is by current branch. Step 0.5 calls gitf-state.sh get feature/search, finds the entry, validates its pause_sha (CACHE HIT). Checks PR #5 — MERGED. Pulls develop. Drops ONLY the feature/search entry (gitf-state.sh del feature/search). The feature/auth-jwt entry is left untouched, so that flow stays suspended and can be resumed later by checking out feature/auth-jwt. Reports feature/search done.",
+      "prompt": "I have two topic branches with open work: feature/auth-jwt (PR #3 to develop, still open) and feature/search (PR #5 to develop). I'm currently checked out on feature/search and PR #5 was just merged on GitHub. I run /gitf.",
+      "expected_output": "Each branch's status is independent and derived from its own graph position — there is no shared state file. The survey of feature/search reports merged_into_develop=true with the branch still present → FLOW A cleanup-only. The github provider re-locates PR #5 via gh pr list --head feature/search, confirms MERGED, syncs develop, and runs CLEANUP on feature/search only. feature/auth-jwt is never touched: it is a different branch and would be handled on its own /gitf run when checked out. Reports feature/search done.",
       "files": []
     },
     {
       "id": 7,
-      "prompt": "There's an old entry in .gitf/state.json under \"feature/login\" from a flow that was abandoned — that branch was deleted and later a brand-new feature/login was created for unrelated work, so the stored pause_sha is NOT in the current branch's history. I'm on the new feature/login with fresh commits. I run /gitf.",
-      "expected_output": "Step 0.5 finds an entry for feature/login but gitf-state.sh valid returns exit 1 (the stored pause_sha is not an ancestor of the current tip) → treated as CACHE MISS, not a false resume. The stale entry is NOT trusted. Runs normal detection → FLOW A for feature/login. On the github provider the LAND step first probes for an existing PR (gh pr list --head feature/login) before creating one, then lands idempotently. Does not act on the abandoned flow's PR number. On successful completion it drops the feature/login entry (gitf-state.sh del), clearing the stale leftover.",
+      "prompt": "I'm on a topic branch called issue-2087-login (no feature/ or fix/ prefix) with fresh commits ahead of develop. I run /gitf.",
+      "expected_output": "Routing is by topology, never by name prefix. The survey reports a topic branch (not develop/main/release/hotfix) with ahead_of_develop>0 → FLOW A. On the github provider the LAND step first probes for an existing PR (gh pr list --head issue-2087-login --base develop --state all) before creating one, then lands idempotently: pushes the branch, opens a PR to develop, checks mergeStateStatus, merges, syncs develop, CLEANUP. The unconventional branch name is treated exactly like any other topic branch.",
       "files": []
     },
     {
       "id": 8,
-      "prompt": "I'm on release/v1.4.0 but .gitf/state.json has no entry for it (the state file was deleted). In reality the PR from release/v1.4.0 to main was already created and merged, the tag v1.4.0 already exists on main, but the back-merge PR to develop was never made. I run /gitf.",
-      "expected_output": "Step 0.5 finds no entry for release/v1.4.0 → CACHE MISS. Detection routes to FLOW B (on release/*), running in idempotent mode. Because the state (and thus the original -v flag) is gone, version_mode and version are inferred from the branch name: release/v1.4.0 → version_mode=true, version=1.4.0 (so tag handling stays correct). The version-bump probe sees the version file already at 1.4.0 → skips B-3. The land-to-main probe (gh pr list --head release/v1.4.0 --base main --state all) finds the PR already MERGED → skips creating/merging it. The tag probe (git tag -l v1.4.0) is non-empty → skips TAG (and would have created it had it been missing). Proceeds to the back-merge step, probes for that PR (none) → creates the release→develop PR and lands it, then cleans up. Never double-creates a PR, double-merges, or double-tags.",
+      "prompt": "I'm on release/v1.4.0. The PR from release/v1.4.0 to main was already created and merged, the tag v1.4.0 already exists on main, but the back-merge PR to develop was never made (the previous run stopped). There is no .gitf/state.json anywhere. I run /gitf.",
+      "expected_output": "FLOW B with position re-derived entirely from the git graph and gh — no saved state. version_mode/version are inferred from the branch name (release/v1.4.0 → version_mode=true, version=1.4.0). The version-bump probe sees the version file already at 1.4.0 → skips B-3. The land-to-main probe (gh pr list --head release/v1.4.0 --base main --state all) finds the PR already MERGED → skips creating/merging it. The tag probe (git tag -l v1.4.0) is non-empty → skips TAG. Proceeds to the back-merge step, probes for that PR (none) → creates the release→develop PR and lands it, then cleans up. Never double-creates a PR, double-merges, or double-tags.",
       "files": []
     },
     {
       "id": 9,
-      "prompt": "I'm on develop, clean, with commits ahead of main, ready to cut a release. But there is also a hotfix/login-crash branch that has commits not yet merged into main (an urgent fix still in progress). There is no state entry for the current action. I run /gitf.",
-      "expected_output": "FLOW B on the cache-miss path. The B-0 in-flight guard probes 'release/*' and 'hotfix/*' for branches with commits not in main and finds hotfix/login-crash. It HALTS: tells the user a release must wait for the unfinished hotfix, and to finish or delete hotfix/login-crash before starting the release. It does NOT create a release branch and does NOT append -2. (A release waits for any in-flight production change.)",
+      "prompt": "I'm on develop, clean, with commits ahead of main, ready to cut a release. But there is also a hotfix/login-crash branch that has commits not yet merged into main (an urgent fix still in progress). I run /gitf.",
+      "expected_output": "Survey routes to FLOW B (is_develop, develop_ahead_of_main>0). The B-0 in-flight guard probes 'release/*' and 'hotfix/*' for branches with commits not in main and finds hotfix/login-crash. It HALTS: tells the user a release must wait for the unfinished hotfix, and to finish or delete hotfix/login-crash before starting the release. It does NOT create a release branch and does NOT append -2. (A release waits for any in-flight production change.) The guard is derived from git branches, not stored state.",
       "files": []
     },
     {
       "id": 10,
-      "prompt": "A release is mid-review: release/v3.0.0 exists with commits not yet in main and has a suspended state entry (awaiting_merge_to_main). An urgent production bug comes in, so I create hotfix/cart-total off main, commit the fix, and run /gitf while on hotfix/cart-total. There is no state entry for hotfix/cart-total yet.",
-      "expected_output": "FLOW C on the cache-miss path. The C-0 in-flight guard probes only OTHER 'hotfix/*' branches (excluding the current one) — it deliberately does NOT probe release/*, because a hotfix is highest priority and does not wait for an in-flight release. No other hotfix exists, so it does NOT halt. The hotfix proceeds: lands to main, tags the patch version, back-merges to develop, cleans up. The release/v3.0.0 entry is left untouched and can be resumed later by checking out release/v3.0.0 (which will then wait correctly because that branch resumes via cache hit, not B-0).",
+      "prompt": "A release is mid-flight: release/v3.0.0 exists with commits not yet in main. An urgent production bug comes in, so I create hotfix/cart-total off main, commit the fix, and run /gitf while on hotfix/cart-total.",
+      "expected_output": "Survey reports gitf_branch=hotfix → FLOW C. The C-0 in-flight guard probes only OTHER 'hotfix/*' branches (excluding the current one) — it deliberately does NOT probe release/*, because a hotfix is highest priority and does not wait for an in-flight release. No other hotfix exists, so it does NOT halt. The hotfix proceeds: lands to main, tags the patch version, back-merges to develop, cleans up. release/v3.0.0 is left untouched and is handled on its own later /gitf run (which will then wait correctly via B-0 because the hotfix is gone).",
       "files": []
     },
     {
       "id": 11,
-      "prompt": "I'm on release/v1.5.0. A previous /gitf ran the code-review gate, which found issues needing my decision and stopped, writing a .gitf/state.json entry under \"release/v1.5.0\" with step=awaiting_code_review, release_branch=release/v1.5.0, and a matching pause_sha. I've since addressed the feedback and committed the changes to the release branch. I run /gitf.",
-      "expected_output": "Step 0.5 gets the release/v1.5.0 entry and validates pause_sha. Because new commits were added, the tip moved but pause_sha is still an ancestor → CACHE HIT. resume.md sees step=awaiting_code_review (no PR involved) and re-enters the code-review gate from the top on release/v1.5.0, re-running every configured reviewer. If the gate now passes, it continues FLOW B from B-5 (land release → main). If the gate still reports unresolved findings, it re-saves the entry and halts again.",
+      "prompt": "I'm on release/v1.5.0. A previous /gitf ran the code-review gate, which found issues needing my decision and stopped. I've since addressed the feedback and committed the changes to the release branch. I run /gitf.",
+      "expected_output": "Survey reports gitf_branch=release → FLOW B. No state is read. Routing lands back on release/v1.5.0 and re-enters the code-review gate from the top (idempotent), detecting reviewers live and re-running them on main..release/v1.5.0. If the gate now passes, it continues FLOW B from B-5 (land release → main). If the gate still reports unresolved findings, it emits blocked-code-review and halts again — re-runnable with no stored state.",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "I'm working in a linked git worktree at ../wt-featx that holds the branch feat-x (created with git worktree add). feat-x has commits ahead of develop, and develop is checked out in the main worktree. I run /gitf from inside the linked worktree.",
+      "expected_output": "Survey reports current_is_linked=true, current_path=the linked worktree, develop_at=the main worktree → FLOW A on topic branch feat-x. LAND merges feat-x into develop inside develop's own worktree (git -C <develop_at> merge --no-ff) — it never runs 'git checkout develop' in the linked worktree. After landing, CLEANUP steps out to main_path, removes the feat-x worktree with 'git worktree remove' (no --force), deletes the feat-x branch, and prunes. Reports feat-x landed and the worktree removed.",
+      "files": []
+    },
+    {
+      "id": 13,
+      "prompt": "Same setup as before: feat-y lives in a linked worktree and has just been merged into develop. But that worktree has an uncommitted/untracked file in it. I run /gitf.",
+      "expected_output": "CLEANUP tries 'git worktree remove' WITHOUT --force. git refuses because the worktree is not clean — that refusal is the intended guard. The flow prints GITF_HALT and STOPS, telling the user the worktree at <path> has uncommitted/untracked changes and must be cleaned or removed by hand. It does NOT pass --force and does NOT delete the branch out from under the dirty worktree.",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "I'm on develop in a pure-local repo with no remote configured (no origin, no gh). develop has a feature commit ahead of main. I run /gitf -v.",
+      "expected_output": "Survey reports platform.provider=local, has_remote=false → FLOW B with the local provider. All LAND steps are synchronous --no-ff merges (no PRs); push/pull are no-ops. If develop is checked out where the merge target lives, the merge runs in develop's worktree; if a target branch is not checked out anywhere, an ephemeral worktree is created for the merge and removed afterward. Bumps version, merges release into main, tags, back-merges into develop, deletes the release branch, reports the release summary. Never blocks.",
       "files": []
     }
   ]

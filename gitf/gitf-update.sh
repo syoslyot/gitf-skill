@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="syoslyot/git-flow-skill"
+REPO="syoslyot/gitf-skill"
 INSTALL_DIR="$HOME/.claude/skills/gitf"
 CHECK_INTERVAL=604800  # 7 days
 LAST_CHECK_FILE="/tmp/gitf-last-check"
@@ -74,7 +74,7 @@ fi
 # shipped tests/ before this exclusion existed).
 rm -rf "$INSTALL_DIR/tests"
 
-chmod +x "$INSTALL_DIR/gitf-detect.sh" "$INSTALL_DIR/gitf-state.sh" "$INSTALL_DIR/gitf-update.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/gitf-survey.sh" "$INSTALL_DIR/gitf-update.sh" 2>/dev/null || true
 
 if [ "$NEEDS_HEAL" = "true" ] && [ "$INSTALLED" = "$LATEST" ]; then
   echo "gitf healed: restored multi-file layout (v$LATEST)"

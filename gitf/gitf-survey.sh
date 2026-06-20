@@ -2,7 +2,8 @@
 # gitf-survey.sh — the single FACTS source for /gitf.
 # Emits ONE line of JSON: platform capabilities + branch/topology + worktrees,
 # all read from the live git DAG and `git worktree list`. The skill reads this
-# verbatim and never re-derives facts itself. No .gitf/config, no state file.
+# verbatim and never re-derives facts itself. Reads only the live git DAG —
+# never a per-project config or any saved-state file.
 #
 # Re-run on every /gitf — never cached.
 set -uo pipefail

@@ -68,7 +68,7 @@ Read the JSON verbatim — do **not** re-derive any fact yourself.
 - `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
   C-2) for this run only.
 - `/gitf --local` → force the `local` provider for this run (override a GitHub
-  remote). Replaces the old `.gitf/config` `platform:"local"` setting.
+  remote). Replaces the removed per-project platform override.
 
 There is no saved state to consult: every pause point (a blocked GitHub PR, an
 unfinished release, an unresolved review) is re-derived from `gh` and the git

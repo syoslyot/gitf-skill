@@ -16,19 +16,19 @@ cp -r gitf/ ~/.claude/skills/gitf/
 
 The skill is multi-file and loaded on demand:
 
-- `gitf/SKILL.md` — slim core: bootstrap/self-heal, detection call, decision tree, routing, operation-contract interface, state schema, rules. Always loaded.
-- `gitf/gitf-detect.sh` — capability-based platform detector → single-line JSON.
+- `gitf/SKILL.md` — slim core: bootstrap/self-heal, survey call, topology decision tree, routing, operation-contract interface, rules. Always loaded.
+- `gitf/gitf-survey.sh` — single FACTS script: platform + branch/topology + worktree facts from the live git DAG → single-line JSON.
 - `gitf/gitf-update.sh` — self-updater (tarball sync of the whole `gitf/` tree + self-heal).
 - `gitf/providers/` — one file per platform implementing the operation contract (`github.md`, `local.md`, `README.md`). Exactly one is loaded per run.
-- `gitf/flows/` — `flow-a|b|c|d.md`, `resume.md`, `status-messages.md`. Exactly one flow is loaded per run.
-- `gitf/tests/test-detect.sh` — capability-mock unit tests for the detector.
+- `gitf/flows/` — `flow-a|b|c|d.md`, `code-review-gate.md`, `status-messages.md`. Exactly one flow is loaded per run.
+- `gitf/tests/test-survey.sh` — capability + topology + worktree mock unit tests for the survey script.
 - `evals/evals.json` — test cases for iterating on the skill via `/skill-creator`.
 
 ## Developing the skill
 
 Behavior is split by concern: platform-agnostic Git Flow steps live in `flows/` (coarse verbs only), platform commands live in `providers/`, and the glue lives in `SKILL.md`. There are no build steps.
 
-Run the detector tests directly: `bash gitf/tests/test-detect.sh` (pure-local, no network, exit 0 = green).
+Run the survey tests directly: `bash gitf/tests/test-survey.sh` (pure-local, no network, exit 0 = green).
 
 To test skill behavior, use `/skill-creator` in Claude Code — it reads `evals/evals.json` and runs subagents against the skill. Workspace outputs go in `gitf-workspace/` (gitignored).
 

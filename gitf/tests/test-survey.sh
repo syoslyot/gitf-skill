@@ -123,6 +123,26 @@ R="$(repo_flow)"
 J="$(run_local "$R")"
 check "dirty true" "$J" dirty true
 
+# --- worktree facts ---
+# develop lives in the main worktree; a linked worktree holds a topic branch.
+R="$(repo_flow)"
+( cd "$R" && git commit -q --allow-empty -m c1 )   # give develop a commit
+WT="$SANDBOX/wt.$$"
+( cd "$R" && git worktree add -q -b issue-99 "$WT" develop )
+MAIN_TL="$( cd "$R" && git rev-parse --show-toplevel )"
+WT_TL="$( cd "$WT" && git rev-parse --show-toplevel )"
+
+# Surveyed from inside the linked worktree:
+J="$( cd "$WT" && PATH="$CLEAN_BIN" bash "$SURVEY" )"
+check "wt current_is_linked"  "$J" current_is_linked true
+check "wt current_path"       "$J" current_path "$WT_TL"
+check "wt main_path"          "$J" main_path "$MAIN_TL"
+check "wt develop_at"         "$J" develop_at "$MAIN_TL"
+
+# Surveyed from the main worktree (develop): not linked.
+J="$( cd "$R" && PATH="$CLEAN_BIN" bash "$SURVEY" )"
+check "main current_is_linked" "$J" current_is_linked false
+
 echo "------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

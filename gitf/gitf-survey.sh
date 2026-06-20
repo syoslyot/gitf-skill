@@ -75,5 +75,21 @@ if branch_exists develop && branch_exists main; then
   DEVELOP_AHEAD_OF_MAIN=$(count "main..develop")
 fi
 
+# ===== worktrees =====
+CURRENT_PATH=$(git rev-parse --show-toplevel 2>/dev/null || echo null)
+wt_path=""; first=1
+while IFS= read -r line; do
+  case "$line" in
+    "worktree "*)
+      wt_path="${line#worktree }"
+      if [ "$first" = 1 ]; then MAIN_PATH="$wt_path"; first=0; fi ;;
+    "branch refs/heads/develop") DEVELOP_AT="$wt_path" ;;
+    "branch refs/heads/main")    MAIN_AT="$wt_path" ;;
+  esac
+done < <(git worktree list --porcelain 2>/dev/null)
+if [ "$CURRENT_PATH" != null ] && [ "$CURRENT_PATH" != "$MAIN_PATH" ]; then
+  CURRENT_IS_LINKED=true
+fi
+
 emit
 exit 0

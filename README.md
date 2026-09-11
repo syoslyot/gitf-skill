@@ -43,7 +43,7 @@ That's it.
 | On `develop`, ahead of `main` | Full release: branch → bump version → land on main → tag → back-merge → clean up |
 | On `develop`, AI committed here by mistake | Detects rogue commits, creates a branch from context, moves them over, then proceeds |
 | On `develop`, in sync with `main` | Tells you there's nothing to release |
-| In a repo with **no `develop`** | Single-trunk mode: `main` is the integration branch. Topic branches land there; `/gitf -v` bumps the version and tags on `main`. No release or hotfix flow — landing on `main` is the release |
+| In a repo with **no `develop`** | Single-trunk mode: `main` is the integration branch. Topic branches land there; `/gitf -v` bumps the version and tags on `main` — from a topic branch, or standing on `main` itself. No release or hotfix flow: landing on `main` is the release, and a branch named `release/*` there is just an ordinary topic branch |
 | On `main` | Warns you not to work here directly |
 
 ## Works with or without GitHub
@@ -103,8 +103,10 @@ Then use `/gitf` in any Claude Code session across any project.
 ### Requirements
 
 - [Claude Code](https://claude.ai/code)
-- A git repo. With a `develop` branch it runs full Git Flow; with `main` alone it
-  runs single-trunk mode, where topic branches land on `main` and `/gitf -v` tags there
+- A git repo with either a `develop` branch (full Git Flow) or a `main` branch
+  (single-trunk mode: topic branches land on `main`, `/gitf -v` bumps and tags
+  there). A repo with neither is reported as unrecognised rather than guessed at —
+  trunk mode recognises `main` only, not `master`
 - *Optional* — [GitHub CLI](https://cli.github.com/) (`gh`), authenticated, for the PR-based GitHub flow. Without it, `/gitf` runs in local-merge mode.
 
 ---

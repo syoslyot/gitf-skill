@@ -88,6 +88,7 @@ J="$(run_local "$R")"
 check "topic current"            "$J" current issue-42
 check "topic model"              "$J" model gitflow
 check "topic integration"        "$J" integration develop
+check "topic integration_ref"    "$J" integration_ref develop
 check "topic is_integration"     "$J" is_integration false
 check "topic is_develop"         "$J" is_develop false
 check "topic gitf_branch"        "$J" gitf_branch null
@@ -141,6 +142,7 @@ R="$(repo_trunk)"
 J="$(run_local "$R")"
 check "trunk model"          "$J" model trunk
 check "trunk integration"    "$J" integration main
+check "trunk integration_ref" "$J" integration_ref main
 check "trunk is_integration" "$J" is_integration true
 check "trunk is_main"        "$J" is_main true
 check "trunk is_develop"     "$J" is_develop false
@@ -176,10 +178,14 @@ SRC="$(repo_flow)"
 CLONE="$SANDBOX/clone.$$"
 git clone -q "$SRC" "$CLONE" 2>/dev/null
 J="$( cd "$CLONE" && PATH="$CLEAN_BIN" bash "$SURVEY" )"
-check "clone model"       "$J" model gitflow
-check "clone integration" "$J" integration develop
+check "clone model"           "$J" model gitflow
+check "clone integration"     "$J" integration develop
+# No local develop in a fresh clone — the ref flows must use is the remote one.
+check "clone integration_ref" "$J" integration_ref origin/develop
 
-# A trunk named `master` must be reported as `master`, not a fabricated `main`.
+# Trunk mode recognises `main` only. A repo trunked on `master` must report
+# unknown rather than a fabricated `main`: every other part of gitf is written
+# against the literal `main`, and one such path deleted the production branch.
 repo_master() {
   local d; d="$(mktemp -d "$SANDBOX/master.XXXXXX")"
   ( cd "$d" && git init -q -b master && git config user.email t@t && git config user.name t
@@ -188,13 +194,10 @@ repo_master() {
 }
 R="$(repo_master)"
 J="$(run_local "$R")"
-check "master model"          "$J" model trunk
-check "master integration"    "$J" integration master
-check "master is_integration" "$J" is_integration true
-R2="$R"
-( cd "$R2" && git checkout -q -b feature/x && git commit -q --allow-empty -m w )
-J="$(run_local "$R2")"
-check "master topic ahead_of_integration" "$J" ahead_of_integration 1
+check "master model"           "$J" model unknown
+check "master integration"     "$J" integration null
+check "master integration_ref" "$J" integration_ref null
+check "master is_integration"  "$J" is_integration false
 
 # release/* in a trunk repo is an ordinary topic branch — routing it to Flow B
 # would LAND onto a develop that does not exist.

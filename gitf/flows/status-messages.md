@@ -11,13 +11,13 @@ Post-flow and prompt messages. Flows reference these by name. `blocked-*` and
 
 ### flow-a-done-trunk
 ```
-✓ <branch-name> landed on main.
+✓ <branch-name> landed on <integration>.
   Single-trunk repo — this is already released. Run /gitf -v to cut a version tag.
 ```
 
 ### flow-a-done-trunk (version)
 ```
-✓ <branch-name> landed on main and released as v<version>.
+✓ <branch-name> landed on <integration> and released as v<version>.
 ```
 
 ### flow-b-done (no version)
@@ -45,7 +45,7 @@ develop and main are already in sync — nothing to release.
 
 ### nothing-to-do-trunk
 ```
-main has nothing pending — no topic branch to land and no uncommitted work.
+<integration> has nothing pending — no topic branch to land and no uncommitted work.
   Start work on a feature/* or fix/* branch; /gitf lands it back here.
 ```
 

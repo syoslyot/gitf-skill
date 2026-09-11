@@ -112,7 +112,8 @@ topic branch and falls through to rule 5.)
    5b. topology.merged_into_integration AND (branch still exists OR worktree present)
        → FLOW A in CLEANUP-only mode (the land already happened; just clean up)
    5c. else
-       → STOP: "nothing to do"
+       → STOP: "nothing to do" (trunk → nothing-to-do-trunk; the default message
+         names develop, which a trunk repo does not have)
 ```
 
 **Topic branches are classified by topology, never by name prefix.** A branch
@@ -122,8 +123,8 @@ routing requirement.
 
 ## Ambiguity resolution
 
-- On the integration branch, if both 1a conditions hold (dirty working tree **and** unpushed
-  commits), Flow D handles both in one pass — the dirty changes and the rogue
+- **Under gitflow**, on `develop`, if both dirty working tree **and** unpushed
+  commits hold, Flow D handles both in one pass — the dirty changes and the rogue
   commits move onto the inferred branch together.
 - If a version bump type is ambiguous between patch and minor, default to minor.
   `BREAKING CHANGE` → major, but confirm with the user first.
@@ -140,6 +141,10 @@ routing requirement.
   for the hotfix). This guard is derived from `git branch` + `git log`, not from
   stored state, so it never blocks resuming a branch you already have checked
   out — only starting a brand-new flow.
+- **Under trunk**, the same state is split: the dirty changes go to Flow D
+  Case 1, and the unpushed commits are simply pushed (rule 1a″). Flow D Case 2
+  is gitflow-only — `reset --hard` must never touch a single trunk, where
+  committing directly is the model rather than a mistake.
 
 ## Preconditions
 

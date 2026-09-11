@@ -22,16 +22,20 @@ Use `<remote>` = the detector's `default_remote`.
 
 ## LAND base head [keep-branch]
 
-**Idempotency probe.** If `git log <base>..<head>` is empty, `<head>` is already
-merged into `<base>` — skip the merge, go to the next step.
+**Idempotency probe.** If `git log <base-ref>..<head>` is empty, `<head>` is
+already merged — skip the merge, go to the next step. Use
+`topology.integration_ref`, not the bare name, whenever `<base>` is the
+integration branch: a fresh clone has no local `develop`, so `git log
+develop..HEAD` fails with `unknown revision`.
 
 The merge must happen in the worktree that holds `<base>`. `<base>` is whatever
 the flow passed — `develop`, `main`, or a trunk under another name — so resolve
 its worktree by branch, never by assuming the name:
 
 ```bash
+# substr($0,10) not $2 — a worktree path may contain spaces.
 base_wt=$(git worktree list --porcelain | awk -v b="refs/heads/<base>" '
-  /^worktree /{p=$2} $0=="branch "b{print p}')
+  /^worktree /{p=substr($0,10)} $0=="branch "b{print p}')
 ```
 
 `worktrees.develop_at` / `worktrees.main_at` from the survey are the same fact
@@ -89,14 +93,20 @@ git push <remote> v<version>
 
 ## CLEANUP branch
 
+**Never delete the integration branch.** Before any deletion, stop if `<branch>`
+equals `topology.integration`, `main`, or `master`; report instead. No correct
+flow asks to delete a production branch, so reaching here with one means routing
+went wrong upstream.
+
 Delete the branch and, if it lives in a worktree, remove that worktree first.
 Never stand in the worktree being removed.
 
 ```bash
 # 1. If <branch> is checked out in a worktree, remove it (no --force: a dirty
 #    tree makes git refuse, which is our intended halt — report and stop).
+# substr($0,10) not $2 — a worktree path may contain spaces.
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/<branch>" '
-  /^worktree /{p=$2} $0=="branch "b{print p}')
+  /^worktree /{p=substr($0,10)} $0=="branch "b{print p}')
 if [ -n "$wt" ]; then
   cd <main_path>            # leave the worktree before removing it
   git worktree remove "$wt" || { echo "GITF_HALT: worktree $wt not clean"; exit 0; }

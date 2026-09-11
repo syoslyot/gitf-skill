@@ -28,11 +28,13 @@ and the branch/worktree still present (the prior run merged but could not finish
 cleanup, e.g. a leaked worktree), skip steps 1-2 and run `CLEANUP <current-branch>`
 directly.
 
-**Still run step 4** on this path when `model == "trunk"` and `VERSION_MODE=true`.
-The land already happened, but the bump and tag may not have — a run interrupted
-after the merge and before the tag would otherwise lose its version silently, and
-both operations are idempotent (an existing tag is skipped, an already-bumped
-version file is left alone). Then report as in step 5.
+**On this path, when `model == "trunk"` and `VERSION_MODE=true`, run `SYNC
+<integration>` and then step 4.** The land already happened but the bump and tag
+may not have, and skipping them would silently lose the version. `SYNC` is not
+optional here: it both fetches the merge commit (under the github provider it
+exists only on the remote) and checks out `<integration>`, without which the bump
+would commit onto a stale local branch and the tag would land on the topic-branch
+tip instead of the merge commit. Then report as in step 5.
 
 **PR/commit title** (github provider): derive from the branch name in
 Conventional Commits form.
@@ -46,7 +48,8 @@ continues.
 
 **local provider**: `LAND` is a synchronous `--no-ff` merge into `<integration>`,
 then push it if `has_remote`. Never blocks, never writes state. Delete the topic
-branch (`CLEANUP <current-branch>`) and report `flow-a-done`.
+branch (`CLEANUP <current-branch>`) and report per step 5 — which message
+depends on `model` and `VERSION_MODE`, not on the provider.
 
 ---
 
@@ -68,23 +71,38 @@ noise, and it is the tag, not the merge, that marks a release.
 `flows/code-review-gate.md` and run it on the topic branch before `LAND`. Same
 semantics as B-4 — production code is about to ship.
 
-### Bump + tag (step 4)
+### Bump + tag (step 4) {#release-step}
 
-On `<integration>` (= `main`), after `SYNC`:
+Runs on `<integration>`, after `SYNC <integration>` has checked it out. Also
+reachable directly from the decision tree when standing on `<integration>` in a
+trunk repo with `-v` (see SKILL.md rule 1b′).
 
-1. **Find the current version** from whichever source the repo has, in order:
-   `VERSION`, `package.json` (`.version`), `pyproject.toml` (`project.version`),
-   `Cargo.toml` (`package.version`), then the newest `v*` tag. If none exists,
-   start from `v0.1.0` and say so.
-2. **Decide the bump** from the landed commits — `feat:` → minor, `fix:`/`chore:`
-   → patch, a breaking change → major. State the inferred level and the resulting
-   version. Ask only when the commits genuinely do not settle it.
-3. **Write it back** if a version file exists: commit on `main` as
+1. **Find the version source**, in order: `VERSION`, `package.json`
+   (`.version`), `pyproject.toml` (`project.version`), `Cargo.toml`
+   (`package.version`). Call its current value `<cur>`. If no file exists, use
+   the newest `v*` tag; if there is none either, start at `0.1.0` and say so.
+
+2. **Decide whether to bump — this is the idempotency point.**
+
+   ```
+   IF `git tag -l v<cur>` is EMPTY  → <cur> was never released.
+                                      Do NOT bump. Tag <cur>. Go to step 4.
+   ELSE                             → <cur> is already released. Bump it.
+   ```
+
+   Keying off "does the file already hold the *newly computed* version" is wrong
+   and loses a version: a run interrupted between the bump commit and the tag
+   leaves the file at `1.4.0` untagged, and a re-run would compute `1.5.0` from
+   the commits, bump again, and tag `v1.5.0` — `v1.4.0` never exists. Keying off
+   whether `<cur>` is tagged makes the re-run tag `v1.4.0` and stop, which is
+   what the interrupted run was about to do.
+
+3. **Bump** (only when step 2 said to): `feat:` → minor, `fix:`/`chore:` →
+   patch, a breaking change → major, computed from the landed commits. State the
+   inferred level and the result. Write the file, commit on `<integration>` as
    `chore: bump version to v<X.Y.Z>`, then push.
-4. `TAG <version>` — annotated tag `v<X.Y.Z>`, published when a remote exists.
 
-Every step here is idempotent: if the version file already holds the computed
-version, skip the bump commit; if `git tag -l v<X.Y.Z>` is non-empty, skip the
-tag. This is what makes the cleanup-only re-run above safe to route through.
+4. `TAG <version>` — annotated tag `v<X.Y.Z>`, published when a remote exists.
+   Skip if `git tag -l v<version>` is already non-empty.
 
 There is no back-merge step: in a trunk repo there is nothing to back-merge into.

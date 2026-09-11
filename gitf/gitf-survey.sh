@@ -14,10 +14,10 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || true)
 jstr() { [ "$1" = "null" ] && printf 'null' || printf '"%s"' "$1"; }
 
 emit() {
-  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"model":%s,"integration":%s,"is_integration":%s,"is_develop":%s,"is_main":%s,"gitf_branch":%s,"ahead_of_integration":%s,"merged_into_integration":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
+  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"model":%s,"integration":%s,"is_integration":%s,"is_develop":%s,"is_main":%s,"gitf_branch":%s,"integration_ref":%s,"ahead_of_integration":%s,"merged_into_integration":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
     "$PROVIDER" "$NEEDS_LOGIN" "$HAS_REMOTE" "$(jstr "$DEFAULT_REMOTE")" \
     "$(jstr "$CURRENT")" "$(jstr "$HEAD")" "$DIRTY" \
-    "$(jstr "$MODEL")" "$(jstr "$INTEGRATION")" "$IS_INTEGRATION" "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$AHEAD_OF_INTEGRATION" "$MERGED_INTO_INTEGRATION" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
+    "$(jstr "$MODEL")" "$(jstr "$INTEGRATION")" "$IS_INTEGRATION" "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$(jstr "${INTEGRATION_REF:-null}")" "$AHEAD_OF_INTEGRATION" "$MERGED_INTO_INTEGRATION" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
     "$(jstr "$CURRENT_PATH")" "$(jstr "$MAIN_PATH")" "$CURRENT_IS_LINKED" "$(jstr "$DEVELOP_AT")" "$(jstr "$MAIN_AT")"
 }
 
@@ -72,28 +72,22 @@ resolve_ref() {
   return 1
 }
 
-# trunk_name -> the single-trunk repo's trunk. Not every repo calls it `main`;
-# emitting "main" for a `master` repo would be a false fact that silently routes
-# every topic branch to nothing-to-do.
-trunk_name() {
-  local b r
-  for b in main master trunk; do
-    resolve_ref "$b" >/dev/null 2>&1 && { printf '%s' "$b"; return 0; }
-  done
-  r=$(git symbolic-ref -q --short "refs/remotes/${DEFAULT_REMOTE:-origin}/HEAD" 2>/dev/null)
-  [ -n "$r" ] && { printf '%s' "${r##*/}"; return 0; }
-  return 1
-}
-
 # The integration branch is where topic work lands: `develop` under two-trunk Git
-# Flow, the trunk itself when there is no develop. Everything below measures
-# against it rather than a hardcoded `develop`. `model=unknown` means neither
-# could be identified — routing must stop rather than guess.
+# Flow, `main` when there is no develop. Everything below measures against it
+# rather than a hardcoded name.
+#
+# Trunk mode recognises `main` and nothing else. Accepting `master` or an
+# arbitrary default branch was tried and reverted: every other part of gitf
+# (is_main, develop_ahead_of_main, the flows' bump/tag steps, the status
+# messages) is written against the literal `main`, so a trunk under another name
+# produced facts that disagreed with the branch actually on disk — including one
+# path that deleted the production branch. A repo gitf cannot read is told so
+# via model=unknown; it is never guessed at.
 INTEGRATION_REF=""
 if INTEGRATION_REF=$(resolve_ref develop); then
   MODEL=gitflow; INTEGRATION=develop
-elif TRUNK_NAME=$(trunk_name); then
-  MODEL=trunk; INTEGRATION="$TRUNK_NAME"; INTEGRATION_REF=$(resolve_ref "$TRUNK_NAME")
+elif INTEGRATION_REF=$(resolve_ref main); then
+  MODEL=trunk; INTEGRATION=main
 else
   MODEL=unknown; INTEGRATION=null; INTEGRATION_REF=""
 fi

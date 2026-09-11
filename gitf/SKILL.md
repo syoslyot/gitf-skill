@@ -47,16 +47,22 @@ Read the JSON verbatim — do **not** re-derive any fact yourself.
 ```json
 {"platform":{"provider":"github|local","needs_login":bool,"has_remote":bool,"default_remote":"origin|null"},
  "branch":{"current":"<name>","head":"<sha>","dirty":bool},
- "topology":{"model":"gitflow|trunk","integration":"develop|main","is_integration":bool,
-   "is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null",
+ "topology":{"model":"gitflow|trunk|unknown","integration":"develop|main|null","is_integration":bool,
+   "is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null","integration_ref":"<ref>|null",
    "ahead_of_integration":int,"merged_into_integration":bool,"ahead_of_origin":int,"develop_ahead_of_main":int},
  "worktrees":{"current_path":"<abs>","main_path":"<abs>","current_is_linked":bool,
    "develop_at":"<abs|null>","main_at":"<abs|null>"}}
 ```
 
+- `topology.integration_ref` is `integration` resolved to something `rev-list` can
+  use — the local branch when it exists, otherwise a remote-tracking ref such as
+  `origin/develop` (a fresh clone has no local `develop`). **Providers must use
+  `integration_ref` for any git command that resolves a revision**, and the plain
+  `integration` name for branch operations and messages.
 - `topology.model` is derived from whether a `develop` branch exists. `gitflow` =
   two trunks, topic work lands on `develop`. `trunk` = single trunk, topic work
-  lands on `main`. `topology.integration` names that branch; **every flow targets
+  lands on `main`. Trunk mode recognises `main` only — a repo whose trunk has any
+  other name reports `model=unknown` rather than a guessed base. `topology.integration` names that branch; **every flow targets
   it, never a hardcoded `develop`.** `is_integration` is true when the current
   branch IS it — so `develop` in a gitflow repo and `main` in a trunk repo route
   through the same branch of the tree.
@@ -72,8 +78,8 @@ Read the JSON verbatim — do **not** re-derive any fact yourself.
 
 - `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`. `-v` affects
   Flow B/C tagging in a gitflow repo, and Flow A's tagging step in a trunk repo.
-- `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
-  C-2) for this run only.
+- `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate for this
+  run only — B-4 / C-2 under gitflow, and Flow A step 1 on a trunk repo with `-v`.
 - `/gitf --local` → force the `local` provider for this run (override a GitHub
   remote). Replaces the removed per-project platform override.
 
@@ -86,8 +92,22 @@ graph by the chosen flow. Flows run idempotently — they probe before each acti
 ## Decision Tree → which flow to load (routes from FACTS)
 
 ```
+topology.model == "unknown"                   → status-messages: unknown-model, STOP
+                                                 (neither develop nor an identifiable
+                                                  trunk — never guess a base)
+
 topology.is_integration:                     # develop (gitflow) or main (trunk)
-  branch.dirty || topology.ahead_of_origin>0  → flows/flow-d.md → flow-a
+  branch.dirty                                → flows/flow-d.md → flow-a
+  model=="gitflow" && ahead_of_origin>0       → flows/flow-d.md → flow-a
+  model=="trunk"   && ahead_of_origin>0       → PUBLISH <integration>, then continue
+                                                 down this list. Direct commits to a
+                                                 single trunk are how the model works;
+                                                 they are not rogue and Flow D must not
+                                                 hard-reset them.
+  model=="trunk"   && VERSION_MODE            → flows/flow-a.md "Bump + tag (step 4)"
+                                                 [rule 1b′] Standing on the trunk with -v
+                                                 means "release what is here". Without
+                                                 this, -v on a trunk is a silent no-op.
   topology.develop_ahead_of_main>0            → flows/flow-b.md  (full release; gitflow only)
   else                                        → status-messages: nothing-to-do
                                                  (trunk → nothing-to-do-trunk)
@@ -99,6 +119,10 @@ topology.is_main                              → status-messages: warn-on-main
 
 topology.gitf_branch == "release"             → flows/flow-b.md  (continue release)
 topology.gitf_branch == "hotfix"              → flows/flow-c.md
+                                                 (the survey only sets gitf_branch under
+                                                  gitflow, so these never fire on a trunk
+                                                  repo — a branch named release/* there is
+                                                  an ordinary topic branch)
 
 else  (TOPIC branch — any name; not the integration branch/main/release/hotfix):
   topology.ahead_of_integration>0             → flows/flow-a.md
@@ -139,6 +163,9 @@ blockable PR; local = synchronous `--no-ff` merge).
 - Never commit directly to the integration branch or `main`.
 - `feature/*` and `fix/*` always branch from `topology.integration`. In a gitflow
   repo that is `develop` and never `main`; in a trunk repo `main` is the only trunk.
+- **`CLEANUP` never deletes `topology.integration`, `main`, or `master`.** If a flow
+  ever reaches `CLEANUP` with one of those, halt and report instead — deleting the
+  production branch is not a recoverable mistake, and no correct flow asks for it.
 - **Trunk repos have no Flow B or Flow C.** There is no develop→main promotion to
   make and no separate production line to hotfix — landing on `main` IS the release.
   `-v` therefore bumps and tags at the end of Flow A (see flows/flow-a.md).

@@ -88,6 +88,7 @@ J="$(run_local "$R")"
 check "topic current"            "$J" current issue-42
 check "topic model"              "$J" model gitflow
 check "topic integration"        "$J" integration develop
+check "topic integration_ref"    "$J" integration_ref develop
 check "topic is_integration"     "$J" is_integration false
 check "topic is_develop"         "$J" is_develop false
 check "topic gitf_branch"        "$J" gitf_branch null
@@ -141,6 +142,7 @@ R="$(repo_trunk)"
 J="$(run_local "$R")"
 check "trunk model"          "$J" model trunk
 check "trunk integration"    "$J" integration main
+check "trunk integration_ref" "$J" integration_ref main
 check "trunk is_integration" "$J" is_integration true
 check "trunk is_main"        "$J" is_main true
 check "trunk is_develop"     "$J" is_develop false
@@ -166,6 +168,61 @@ check "trunk merged merged_into_integration" "$J" merged_into_integration true
 
 # A trunk repo has no release line: develop_ahead_of_main stays 0.
 check "trunk develop_ahead_of_main" "$J" develop_ahead_of_main 0
+
+# --- regressions from the trunk-model review ---
+
+# A fresh clone of a Git Flow repo has develop only as refs/remotes/origin/develop.
+# A refs/heads-only check would call this trunk and land features onto main.
+SRC="$(repo_flow)"
+( cd "$SRC" && git commit -q --allow-empty -m c1 && git checkout -q main )
+CLONE="$SANDBOX/clone.$$"
+git clone -q "$SRC" "$CLONE" 2>/dev/null
+J="$( cd "$CLONE" && PATH="$CLEAN_BIN" bash "$SURVEY" )"
+check "clone model"           "$J" model gitflow
+check "clone integration"     "$J" integration develop
+# No local develop in a fresh clone — the ref flows must use is the remote one.
+check "clone integration_ref" "$J" integration_ref origin/develop
+
+# Trunk mode recognises `main` only. A repo trunked on `master` must report
+# unknown rather than a fabricated `main`: every other part of gitf is written
+# against the literal `main`, and one such path deleted the production branch.
+repo_master() {
+  local d; d="$(mktemp -d "$SANDBOX/master.XXXXXX")"
+  ( cd "$d" && git init -q -b master && git config user.email t@t && git config user.name t
+    git commit -q --allow-empty -m c0 )
+  echo "$d"
+}
+R="$(repo_master)"
+J="$(run_local "$R")"
+check "master model"           "$J" model unknown
+check "master integration"     "$J" integration null
+check "master integration_ref" "$J" integration_ref null
+check "master is_integration"  "$J" is_integration false
+
+# release/* in a trunk repo is an ordinary topic branch — routing it to Flow B
+# would LAND onto a develop that does not exist.
+R="$(repo_trunk)"
+( cd "$R" && git checkout -q -b release/v1.0.0 )
+J="$(run_local "$R")"
+check "trunk release gitf_branch" "$J" gitf_branch null
+R="$(repo_trunk)"
+( cd "$R" && git checkout -q -b hotfix/urgent )
+J="$(run_local "$R")"
+check "trunk hotfix gitf_branch" "$J" gitf_branch null
+
+# gitflow still classifies them.
+R="$(repo_flow)"
+( cd "$R" && git checkout -q -b release/v9.9.9 )
+J="$(run_local "$R")"
+check "gitflow release gitf_branch" "$J" gitf_branch release
+
+# Neither develop nor a recognisable trunk -> unknown, never a guessed base.
+D="$(mktemp -d "$SANDBOX/odd.XXXXXX")"
+( cd "$D" && git init -q -b integration-line && git config user.email t@t && git config user.name t
+  git commit -q --allow-empty -m c0 )
+J="$(run_local "$D")"
+check "unknown model"       "$J" model unknown
+check "unknown integration" "$J" integration null
 
 # --- worktree facts ---
 # develop lives in the main worktree; a linked worktree holds a topic branch.

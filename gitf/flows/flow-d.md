@@ -18,7 +18,13 @@ git checkout -b <inferred-name>   # uncommitted changes follow automatically
 
 Then → Flow A.
 
-### Case 2 — rogue commits on `<integration>`
+### Case 2 — rogue commits on `<integration>` — **gitflow only**
+
+**Does not apply when `topology.model == "trunk"`.** On a single trunk,
+committing directly to it is how the model works; those commits are not rogue
+and must never be hard-reset. A trunk repo with unpushed commits on its trunk
+needs `PUBLISH <integration>` (a plain push), not a rescue — see the decision
+tree, rule 1a.
 
 ```bash
 git checkout -b <inferred-name>

@@ -76,8 +76,11 @@ already `merged_into_integration` that still exists locally or as a worktree.
 
 **CLEANUP-only re-run**: if the survey reports the branch already merged into
 `<integration>` but the branch (or its worktree) still lingers, Flow A skips
-landing and only runs `CLEANUP <branch>` + `SYNC <integration>`. This is how an
-interrupted Flow A finishes cleanly on the next run.
+steps 1-3 and runs `CLEANUP <branch>`. Under `trunk` with `-v` it then runs
+`SYNC <integration>` and step 5 as well — the land happened but the tag may not
+have, and `SYNC` is required first so the bump commits onto the real tip and the
+tag lands on the merge commit. This is how an interrupted Flow A finishes cleanly
+on the next run.
 
 **Postconditions (success)**:
 - Topic branch deleted locally and on the remote.

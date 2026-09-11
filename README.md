@@ -38,11 +38,12 @@ That's it.
 
 | Your current state | What /gitf does |
 |-------------------|-----------------|
-| On a topic branch (`feature/*`, `fix/*`, or **any** name that isn't main/develop/release/hotfix) | Land on develop (PR or local merge) → sync. Branches are classified by topology — commits ahead of develop — not by name prefix |
+| On a topic branch (`feature/*`, `fix/*`, or **any** name that isn't the integration branch/main/release/hotfix) | Land on the integration branch (PR or local merge) → sync. Branches are classified by topology — commits ahead of that branch — not by name prefix |
 | On `hotfix/*` | Land on main → tag → back-merge to develop → sync |
 | On `develop`, ahead of `main` | Full release: branch → bump version → land on main → tag → back-merge → clean up |
 | On `develop`, AI committed here by mistake | Detects rogue commits, creates a branch from context, moves them over, then proceeds |
 | On `develop`, in sync with `main` | Tells you there's nothing to release |
+| In a repo with **no `develop`** | Single-trunk mode: `main` is the integration branch. Topic branches land there; `/gitf -v` bumps the version and tags on `main`. No release or hotfix flow — landing on `main` is the release |
 | On `main` | Warns you not to work here directly |
 
 ## Works with or without GitHub
@@ -102,7 +103,8 @@ Then use `/gitf` in any Claude Code session across any project.
 ### Requirements
 
 - [Claude Code](https://claude.ai/code)
-- A git repo with a `develop` branch
+- A git repo. With a `develop` branch it runs full Git Flow; with `main` alone it
+  runs single-trunk mode, where topic branches land on `main` and `/gitf -v` tags there
 - *Optional* — [GitHub CLI](https://cli.github.com/) (`gh`), authenticated, for the PR-based GitHub flow. Without it, `/gitf` runs in local-merge mode.
 
 ---

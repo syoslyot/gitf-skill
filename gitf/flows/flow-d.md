@@ -1,12 +1,16 @@
 # Flow D — Rescue (AI forgot to branch)
 
-**Trigger**: on `develop` with uncommitted changes (Case 1) or with commits
-ahead of `origin/develop` (Case 2).
+**Trigger**: on the integration branch (`topology.integration` — `develop` in a
+gitflow repo, `main` in a trunk repo) with uncommitted changes (Case 1) or with
+commits ahead of its upstream (Case 2).
+
+`<integration>` below means that branch. The rescue is identical either way: the
+AI committed onto the branch it was supposed to branch *from*.
 
 This flow is **identical across providers** — branch creation, renaming, and
 `reset --hard` are all local git. After rescuing, it hands off to **Flow A**.
 
-### Case 1 — uncommitted changes on develop
+### Case 1 — uncommitted changes on `<integration>`
 
 ```bash
 git checkout -b <inferred-name>   # uncommitted changes follow automatically
@@ -14,12 +18,12 @@ git checkout -b <inferred-name>   # uncommitted changes follow automatically
 
 Then → Flow A.
 
-### Case 2 — rogue commits on develop
+### Case 2 — rogue commits on `<integration>`
 
 ```bash
 git checkout -b <inferred-name>
-git checkout develop
-git reset --hard origin/develop   # local-only repo: reset to the pre-rogue ref instead
+git checkout <integration>
+git reset --hard origin/<integration>   # local-only repo: reset to the pre-rogue ref instead
 git checkout <inferred-name>
 ```
 
@@ -29,5 +33,5 @@ Then → Flow A.
 `feature/<scope>-<kebab-desc>` or `fix/<scope>-<kebab-desc>`. Always report the
 chosen name and the reasoning to the user.
 
-**Postcondition**: `develop` is back in sync with its upstream (or its
+**Postcondition**: `<integration>` is back in sync with its upstream (or its
 pre-rogue state in a local-only repo).

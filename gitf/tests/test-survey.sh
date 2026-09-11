@@ -86,23 +86,27 @@ R="$(repo_flow)"
 ( cd "$R" && git checkout -q -b issue-42 && git commit -q --allow-empty -m work )
 J="$(run_local "$R")"
 check "topic current"            "$J" current issue-42
+check "topic model"              "$J" model gitflow
+check "topic integration"        "$J" integration develop
+check "topic is_integration"     "$J" is_integration false
 check "topic is_develop"         "$J" is_develop false
 check "topic gitf_branch"        "$J" gitf_branch null
-check "topic ahead_of_develop"   "$J" ahead_of_develop 1
-check "topic merged_into_develop" "$J" merged_into_develop false
+check "topic ahead_of_integration"   "$J" ahead_of_integration 1
+check "topic merged_into_integration" "$J" merged_into_integration false
 
 # After --no-ff merge into develop, the same tip is an ancestor of develop.
 ( cd "$R" && git checkout -q develop && git merge -q --no-ff issue-42 -m "Merge issue-42" )
 ( cd "$R" && git checkout -q issue-42 )
 J="$(run_local "$R")"
-check "merged ahead_of_develop"    "$J" ahead_of_develop 0
-check "merged merged_into_develop" "$J" merged_into_develop true
+check "merged ahead_of_integration"    "$J" ahead_of_integration 0
+check "merged merged_into_integration" "$J" merged_into_integration true
 
 # On develop, ahead of main.
 R="$(repo_flow)"
 ( cd "$R" && git commit -q --allow-empty -m feature-on-develop )
 J="$(run_local "$R")"
 check "develop is_develop"          "$J" is_develop true
+check "develop is_integration"      "$J" is_integration true
 check "develop develop_ahead_of_main" "$J" develop_ahead_of_main 1
 
 # On a release branch -> gitf_branch=release.
@@ -122,6 +126,46 @@ R="$(repo_flow)"
 ( cd "$R" && git checkout -q -b wip && echo x > f.txt )
 J="$(run_local "$R")"
 check "dirty true" "$J" dirty true
+
+# --- trunk model (no develop branch) ---
+# repo_trunk -> repo with main only. main IS the integration branch.
+repo_trunk() {
+  local d; d="$(mktemp -d "$SANDBOX/trunk.XXXXXX")"
+  ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t
+    git commit -q --allow-empty -m c0 )
+  echo "$d"
+}
+
+# On main in a trunk repo: it is the integration branch, not a branch to warn about.
+R="$(repo_trunk)"
+J="$(run_local "$R")"
+check "trunk model"          "$J" model trunk
+check "trunk integration"    "$J" integration main
+check "trunk is_integration" "$J" is_integration true
+check "trunk is_main"        "$J" is_main true
+check "trunk is_develop"     "$J" is_develop false
+check "trunk develop_at"     "$J" develop_at null
+
+# Topic branch in a trunk repo measures against main, not a missing develop.
+# This is the regression the whole model exists for: before it, ahead_of_develop
+# was 0 here and every trunk repo routed to nothing-to-do.
+R="$(repo_trunk)"
+( cd "$R" && git checkout -q -b feature/thing && git commit -q --allow-empty -m work )
+J="$(run_local "$R")"
+check "trunk topic model"             "$J" model trunk
+check "trunk topic is_integration"    "$J" is_integration false
+check "trunk topic ahead_of_integration" "$J" ahead_of_integration 1
+check "trunk topic merged_into_integration" "$J" merged_into_integration false
+
+# After landing on main, the same tip is an ancestor -> cleanup-only re-run.
+( cd "$R" && git checkout -q main && git merge -q --no-ff feature/thing -m "Merge feature/thing" )
+( cd "$R" && git checkout -q feature/thing )
+J="$(run_local "$R")"
+check "trunk merged ahead_of_integration"    "$J" ahead_of_integration 0
+check "trunk merged merged_into_integration" "$J" merged_into_integration true
+
+# A trunk repo has no release line: develop_ahead_of_main stays 0.
+check "trunk develop_ahead_of_main" "$J" develop_ahead_of_main 0
 
 # --- worktree facts ---
 # develop lives in the main worktree; a linked worktree holds a topic branch.

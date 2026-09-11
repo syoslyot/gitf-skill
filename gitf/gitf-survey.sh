@@ -24,7 +24,7 @@ emit() {
 # Defaults (Tasks 2 & 3 fill branch/topology/worktrees).
 PROVIDER=local; NEEDS_LOGIN=false; HAS_REMOTE=false; DEFAULT_REMOTE=null
 CURRENT=null; HEAD=null; DIRTY=false
-MODEL=trunk; INTEGRATION=main; IS_INTEGRATION=false
+MODEL=unknown; INTEGRATION=null; IS_INTEGRATION=false
 IS_DEVELOP=false; IS_MAIN=false; GITF_BRANCH=null
 AHEAD_OF_INTEGRATION=0; MERGED_INTO_INTEGRATION=false; AHEAD_OF_ORIGIN=0; DEVELOP_AHEAD_OF_MAIN=0
 CURRENT_PATH=null; MAIN_PATH=null; CURRENT_IS_LINKED=false; DEVELOP_AT=null; MAIN_AT=null
@@ -59,34 +59,69 @@ HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo null)
 branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
 count() { git rev-list --count "$1" 2>/dev/null || echo 0; }
 
-# The integration branch is where topic work lands. A repo with `develop` runs
-# two-trunk Git Flow; a repo without one is single-trunk, and there main IS the
-# integration branch. Everything below measures against this rather than a
-# hardcoded `develop` — otherwise a single-trunk repo reports zero distance from
-# a branch that does not exist and every route collapses to nothing-to-do.
-if branch_exists develop; then
+# resolve_ref <name> -> a ref rev-list can use: the local branch when it exists,
+# otherwise a remote-tracking ref. A fresh `git clone` of a Git Flow repo checks
+# out only the default branch, so `develop` exists solely as
+# refs/remotes/origin/develop. A refs/heads-only test would call that repo
+# single-trunk and land feature work straight onto main.
+resolve_ref() {
+  if git show-ref --verify --quiet "refs/heads/$1"; then printf '%s' "$1"; return 0; fi
+  local r
+  r=$(git for-each-ref --format='%(refname:short)' --count=1 "refs/remotes/*/$1" 2>/dev/null)
+  [ -n "$r" ] && { printf '%s' "$r"; return 0; }
+  return 1
+}
+
+# trunk_name -> the single-trunk repo's trunk. Not every repo calls it `main`;
+# emitting "main" for a `master` repo would be a false fact that silently routes
+# every topic branch to nothing-to-do.
+trunk_name() {
+  local b r
+  for b in main master trunk; do
+    resolve_ref "$b" >/dev/null 2>&1 && { printf '%s' "$b"; return 0; }
+  done
+  r=$(git symbolic-ref -q --short "refs/remotes/${DEFAULT_REMOTE:-origin}/HEAD" 2>/dev/null)
+  [ -n "$r" ] && { printf '%s' "${r##*/}"; return 0; }
+  return 1
+}
+
+# The integration branch is where topic work lands: `develop` under two-trunk Git
+# Flow, the trunk itself when there is no develop. Everything below measures
+# against it rather than a hardcoded `develop`. `model=unknown` means neither
+# could be identified — routing must stop rather than guess.
+INTEGRATION_REF=""
+if INTEGRATION_REF=$(resolve_ref develop); then
   MODEL=gitflow; INTEGRATION=develop
+elif TRUNK_NAME=$(trunk_name); then
+  MODEL=trunk; INTEGRATION="$TRUNK_NAME"; INTEGRATION_REF=$(resolve_ref "$TRUNK_NAME")
 else
-  MODEL=trunk;   INTEGRATION=main
+  MODEL=unknown; INTEGRATION=null; INTEGRATION_REF=""
 fi
 
 [ "$CURRENT" = develop ] && IS_DEVELOP=true
 [ "$CURRENT" = main ] && IS_MAIN=true
-[ "$CURRENT" = "$INTEGRATION" ] && IS_INTEGRATION=true
-case "$CURRENT" in
-  release/*) GITF_BRANCH=release ;;
-  hotfix/*)  GITF_BRANCH=hotfix ;;
-esac
+[ "$INTEGRATION" != null ] && [ "$CURRENT" = "$INTEGRATION" ] && IS_INTEGRATION=true
 
-if branch_exists "$INTEGRATION" && [ "$IS_INTEGRATION" = false ] && [ "$HEAD" != null ]; then
-  AHEAD_OF_INTEGRATION=$(count "$INTEGRATION..HEAD")
-  git merge-base --is-ancestor HEAD "$INTEGRATION" 2>/dev/null && MERGED_INTO_INTEGRATION=true
+# `release/*` and `hotfix/*` only mean something under gitflow: they exist to
+# move work between develop and main. A trunk repo has neither promotion nor a
+# separate production line, so such a branch is an ordinary topic branch —
+# routing it to Flow B/C would LAND onto a develop that does not exist.
+if [ "$MODEL" = gitflow ]; then
+  case "$CURRENT" in
+    release/*) GITF_BRANCH=release ;;
+    hotfix/*)  GITF_BRANCH=hotfix ;;
+  esac
+fi
+
+if [ -n "$INTEGRATION_REF" ] && [ "$IS_INTEGRATION" = false ] && [ "$HEAD" != null ]; then
+  AHEAD_OF_INTEGRATION=$(count "$INTEGRATION_REF..HEAD")
+  git merge-base --is-ancestor HEAD "$INTEGRATION_REF" 2>/dev/null && MERGED_INTO_INTEGRATION=true
 fi
 if [ "$HEAD" != null ] && git rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then
   AHEAD_OF_ORIGIN=$(count '@{upstream}..HEAD')
 fi
-if branch_exists develop && branch_exists main; then
-  DEVELOP_AHEAD_OF_MAIN=$(count "main..develop")
+if D_REF=$(resolve_ref develop) && M_REF=$(resolve_ref main); then
+  DEVELOP_AHEAD_OF_MAIN=$(count "$M_REF..$D_REF")
 fi
 
 # ===== worktrees =====

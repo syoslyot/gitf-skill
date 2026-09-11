@@ -72,9 +72,19 @@ action and skip steps already done.
 ## Decision rules (routed from FACTS, evaluated in order)
 
 ```
-1. topology.is_integration          (develop under gitflow, main under trunk)
-   1a. branch.dirty OR topology.ahead_of_origin > 0
+0. topology.model == "unknown"
+   → STOP: neither a `develop` nor an identifiable trunk was found. Never guess
+     a base branch.
+
+1. topology.is_integration          (develop under gitflow, the trunk under trunk)
+   1a. branch.dirty
        → FLOW D (rescue) → FLOW A
+   1a'. model == "gitflow" AND topology.ahead_of_origin > 0
+       → FLOW D (rescue) → FLOW A
+   1a''. model == "trunk" AND topology.ahead_of_origin > 0
+       → PUBLISH <integration>, then fall through to 1b/1c.
+         Committing straight to a single trunk is the model, not a mistake;
+         Flow D's `reset --hard` must never touch it.
    1b. topology.develop_ahead_of_main > 0        (gitflow only; 0 under trunk)
        → FLOW B (full release)
    1c. else
@@ -85,6 +95,10 @@ action and skip steps already done.
    → STOP: warn user not to work directly on main
    Reachable only under gitflow — in a trunk repo main is the integration
    branch and was already matched by rule 1. Order matters here.
+
+(`gitf_branch` is set by the survey only under gitflow, so rules 3 and 4 are
+unreachable in a trunk repo — a branch named `release/*` there is an ordinary
+topic branch and falls through to rule 5.)
 
 3. topology.gitf_branch == "release"
    → FLOW B (continue an in-progress release)

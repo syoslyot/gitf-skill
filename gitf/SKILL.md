@@ -72,8 +72,8 @@ Read the JSON verbatim — do **not** re-derive any fact yourself.
 
 - `/gitf -v` → `VERSION_MODE=true`; `/gitf` → `VERSION_MODE=false`. `-v` affects
   Flow B/C tagging in a gitflow repo, and Flow A's tagging step in a trunk repo.
-- `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate (B-4 /
-  C-2) for this run only.
+- `/gitf --skip-review` → `SKIP_REVIEW=true`; skips the code-review gate for this
+  run only — B-4 / C-2 under gitflow, and Flow A step 1 on a trunk repo with `-v`.
 - `/gitf --local` → force the `local` provider for this run (override a GitHub
   remote). Replaces the removed per-project platform override.
 
@@ -86,8 +86,18 @@ graph by the chosen flow. Flows run idempotently — they probe before each acti
 ## Decision Tree → which flow to load (routes from FACTS)
 
 ```
+topology.model == "unknown"                   → status-messages: unknown-model, STOP
+                                                 (neither develop nor an identifiable
+                                                  trunk — never guess a base)
+
 topology.is_integration:                     # develop (gitflow) or main (trunk)
-  branch.dirty || topology.ahead_of_origin>0  → flows/flow-d.md → flow-a
+  branch.dirty                                → flows/flow-d.md → flow-a
+  model=="gitflow" && ahead_of_origin>0       → flows/flow-d.md → flow-a
+  model=="trunk"   && ahead_of_origin>0       → PUBLISH <integration>, then continue
+                                                 down this list. Direct commits to a
+                                                 single trunk are how the model works;
+                                                 they are not rogue and Flow D must not
+                                                 hard-reset them.
   topology.develop_ahead_of_main>0            → flows/flow-b.md  (full release; gitflow only)
   else                                        → status-messages: nothing-to-do
                                                  (trunk → nothing-to-do-trunk)
@@ -99,6 +109,10 @@ topology.is_main                              → status-messages: warn-on-main
 
 topology.gitf_branch == "release"             → flows/flow-b.md  (continue release)
 topology.gitf_branch == "hotfix"              → flows/flow-c.md
+                                                 (the survey only sets gitf_branch under
+                                                  gitflow, so these never fire on a trunk
+                                                  repo — a branch named release/* there is
+                                                  an ordinary topic branch)
 
 else  (TOPIC branch — any name; not the integration branch/main/release/hotfix):
   topology.ahead_of_integration>0             → flows/flow-a.md

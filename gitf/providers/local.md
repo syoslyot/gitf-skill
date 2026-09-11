@@ -25,17 +25,28 @@ Use `<remote>` = the detector's `default_remote`.
 **Idempotency probe.** If `git log <base>..<head>` is empty, `<head>` is already
 merged into `<base>` — skip the merge, go to the next step.
 
-The merge must happen in the worktree that holds `<base>`. Use survey facts:
+The merge must happen in the worktree that holds `<base>`. `<base>` is whatever
+the flow passed — `develop`, `main`, or a trunk under another name — so resolve
+its worktree by branch, never by assuming the name:
 
-- If `<base>` is `develop` and `worktrees.develop_at` is non-null → run the merge
+```bash
+base_wt=$(git worktree list --porcelain | awk -v b="refs/heads/<base>" '
+  /^worktree /{p=$2} $0=="branch "b{print p}')
+```
+
+`worktrees.develop_at` / `worktrees.main_at` from the survey are the same fact
+pre-computed for those two names; use them when they apply, and the probe above
+otherwise.
+
+- If `<base>` is checked out in a worktree (`base_wt` non-empty) → run the merge
   in that path (it may be the current worktree or another one):
 
   ```bash
-  git -C <develop_at> merge --no-ff <head> -m "Merge <head> into <base>"
+  git -C "$base_wt" merge --no-ff <head> -m "Merge <head> into <base>"
   ```
 
-- If `<base>` is not checked out in any worktree (its `*_at` is null) → create an
-  ephemeral worktree, merge there, then remove it:
+- If `<base>` is checked out nowhere (`base_wt` empty) → create an ephemeral
+  worktree, merge there, then remove it:
 
   ```bash
   tmp=$(mktemp -d)

@@ -15,12 +15,24 @@ Steps (verbs resolved by the active provider):
 3. On success → `SYNC <integration>` → `CLEANUP <current-branch>` (github deletes
    the PR branch on merge; still call CLEANUP to remove any worktree and local ref)
 4. **[trunk + version only]** bump + tag — see below
-5. **status-messages: flow-a-done** (trunk → `flow-a-done-trunk`)
+5. Report:
+   - gitflow → **status-messages: flow-a-done**
+   - trunk, `VERSION_MODE=false` → **status-messages: flow-a-done-trunk**
+   - trunk, `VERSION_MODE=true` → **status-messages: flow-a-done-trunk (version)**
+
+   Pick by `VERSION_MODE`, not by whether a tag happened to be created — a run
+   that skipped tagging because the tag already existed still released.
 
 **Cleanup-only re-run**: if routed here with `topology.merged_into_integration=true`
 and the branch/worktree still present (the prior run merged but could not finish
-cleanup, e.g. a leaked worktree), skip `LAND` and run `CLEANUP <current-branch>`
-directly, then **status-messages: flow-a-done**.
+cleanup, e.g. a leaked worktree), skip steps 1-2 and run `CLEANUP <current-branch>`
+directly.
+
+**Still run step 4** on this path when `model == "trunk"` and `VERSION_MODE=true`.
+The land already happened, but the bump and tag may not have — a run interrupted
+after the merge and before the tag would otherwise lose its version silently, and
+both operations are idempotent (an existing tag is skipped, an already-bumped
+version file is left alone). Then report as in step 5.
 
 **PR/commit title** (github provider): derive from the branch name in
 Conventional Commits form.
@@ -70,5 +82,9 @@ On `<integration>` (= `main`), after `SYNC`:
 3. **Write it back** if a version file exists: commit on `main` as
    `chore: bump version to v<X.Y.Z>`, then push.
 4. `TAG <version>` — annotated tag `v<X.Y.Z>`, published when a remote exists.
+
+Every step here is idempotent: if the version file already holds the computed
+version, skip the bump commit; if `git tag -l v<X.Y.Z>` is non-empty, skip the
+tag. This is what makes the cleanup-only re-run above safe to route through.
 
 There is no back-merge step: in a trunk repo there is nothing to back-merge into.

@@ -49,6 +49,13 @@ main has nothing pending — no topic branch to land and no uncommitted work.
   Start work on a feature/* or fix/* branch; /gitf lands it back here.
 ```
 
+### unknown-model
+```
+⚠ Can't tell how this repo is organised — found no `develop` branch and no
+  identifiable trunk (`main`, `master`, or a remote HEAD).
+  Create the branch you integrate onto, then run /gitf again.
+```
+
 ### warn-on-main
 ```
 ⚠ You're on main — work should happen on feature/* or fix/* branches off develop.

@@ -14,18 +14,19 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || true)
 jstr() { [ "$1" = "null" ] && printf 'null' || printf '"%s"' "$1"; }
 
 emit() {
-  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"is_develop":%s,"is_main":%s,"gitf_branch":%s,"ahead_of_develop":%s,"merged_into_develop":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
+  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"model":%s,"integration":%s,"is_integration":%s,"is_develop":%s,"is_main":%s,"gitf_branch":%s,"ahead_of_integration":%s,"merged_into_integration":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
     "$PROVIDER" "$NEEDS_LOGIN" "$HAS_REMOTE" "$(jstr "$DEFAULT_REMOTE")" \
     "$(jstr "$CURRENT")" "$(jstr "$HEAD")" "$DIRTY" \
-    "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$AHEAD_OF_DEVELOP" "$MERGED_INTO_DEVELOP" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
+    "$(jstr "$MODEL")" "$(jstr "$INTEGRATION")" "$IS_INTEGRATION" "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$AHEAD_OF_INTEGRATION" "$MERGED_INTO_INTEGRATION" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
     "$(jstr "$CURRENT_PATH")" "$(jstr "$MAIN_PATH")" "$CURRENT_IS_LINKED" "$(jstr "$DEVELOP_AT")" "$(jstr "$MAIN_AT")"
 }
 
 # Defaults (Tasks 2 & 3 fill branch/topology/worktrees).
 PROVIDER=local; NEEDS_LOGIN=false; HAS_REMOTE=false; DEFAULT_REMOTE=null
 CURRENT=null; HEAD=null; DIRTY=false
+MODEL=trunk; INTEGRATION=main; IS_INTEGRATION=false
 IS_DEVELOP=false; IS_MAIN=false; GITF_BRANCH=null
-AHEAD_OF_DEVELOP=0; MERGED_INTO_DEVELOP=false; AHEAD_OF_ORIGIN=0; DEVELOP_AHEAD_OF_MAIN=0
+AHEAD_OF_INTEGRATION=0; MERGED_INTO_INTEGRATION=false; AHEAD_OF_ORIGIN=0; DEVELOP_AHEAD_OF_MAIN=0
 CURRENT_PATH=null; MAIN_PATH=null; CURRENT_IS_LINKED=false; DEVELOP_AT=null; MAIN_AT=null
 
 # Not a git repo: emit minimal facts.
@@ -58,16 +59,28 @@ HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo null)
 branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
 count() { git rev-list --count "$1" 2>/dev/null || echo 0; }
 
+# The integration branch is where topic work lands. A repo with `develop` runs
+# two-trunk Git Flow; a repo without one is single-trunk, and there main IS the
+# integration branch. Everything below measures against this rather than a
+# hardcoded `develop` — otherwise a single-trunk repo reports zero distance from
+# a branch that does not exist and every route collapses to nothing-to-do.
+if branch_exists develop; then
+  MODEL=gitflow; INTEGRATION=develop
+else
+  MODEL=trunk;   INTEGRATION=main
+fi
+
 [ "$CURRENT" = develop ] && IS_DEVELOP=true
 [ "$CURRENT" = main ] && IS_MAIN=true
+[ "$CURRENT" = "$INTEGRATION" ] && IS_INTEGRATION=true
 case "$CURRENT" in
   release/*) GITF_BRANCH=release ;;
   hotfix/*)  GITF_BRANCH=hotfix ;;
 esac
 
-if branch_exists develop && [ "$IS_DEVELOP" = false ] && [ "$HEAD" != null ]; then
-  AHEAD_OF_DEVELOP=$(count "develop..HEAD")
-  git merge-base --is-ancestor HEAD develop 2>/dev/null && MERGED_INTO_DEVELOP=true
+if branch_exists "$INTEGRATION" && [ "$IS_INTEGRATION" = false ] && [ "$HEAD" != null ]; then
+  AHEAD_OF_INTEGRATION=$(count "$INTEGRATION..HEAD")
+  git merge-base --is-ancestor HEAD "$INTEGRATION" 2>/dev/null && MERGED_INTO_INTEGRATION=true
 fi
 if [ "$HEAD" != null ] && git rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then
   AHEAD_OF_ORIGIN=$(count '@{upstream}..HEAD')

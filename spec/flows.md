@@ -53,23 +53,31 @@ re-enters the gate from the top and re-runs every reviewer (idempotent).
 
 ---
 
-## Flow A — Topic branch → Develop
+## Flow A — Topic branch → Integration branch
 
-**Trigger**: a topic branch (any name not main/develop/release/hotfix) with
-`ahead_of_develop > 0`; or, in CLEANUP-only mode, a topic branch already
-`merged_into_develop` that still exists locally or as a worktree.
+`<integration>` below is `topology.integration`: `develop` in a gitflow repo,
+`main` in a trunk repo.
+
+**Trigger**: a topic branch (any name not the integration branch/main/release/
+hotfix) with `ahead_of_integration > 0`; or, in CLEANUP-only mode, a topic branch
+already `merged_into_integration` that still exists locally or as a worktree.
 
 **Steps**:
-1. `PUBLISH <branch>` — `git push -u origin <branch>` (github), no-op without a remote.
-2. `LAND base=develop head=<branch>` — github opens a PR (Conventional Commits
-   title) and merges when `mergeStateStatus=CLEAN`, deleting the branch; local
-   does a `--no-ff` merge.
-3. `SYNC develop` — bring local develop up to date.
+1. **[trunk + `-v` only]** code-review gate on the topic branch — a trunk repo
+   ships production code here, so the gate that guards `main` in Flow B applies.
+2. `PUBLISH <branch>` — `git push -u origin <branch>` (github), no-op without a remote.
+3. `LAND base=<integration> head=<branch>` — github opens a PR (Conventional
+   Commits title) and merges when `mergeStateStatus=CLEAN`, deleting the branch;
+   local does a `--no-ff` merge.
+4. `SYNC <integration>` — bring the local integration branch up to date.
+5. **[trunk + `-v` only]** bump the version file if one exists, commit it on
+   `main`, then `TAG <version>`. There is no back-merge: a trunk repo has nothing
+   to back-merge into.
 
 **CLEANUP-only re-run**: if the survey reports the branch already merged into
-develop but the branch (or its worktree) still lingers, Flow A skips landing and
-only runs `CLEANUP <branch>` + `SYNC develop`. This is how an interrupted Flow A
-finishes cleanly on the next run.
+`<integration>` but the branch (or its worktree) still lingers, Flow A skips
+landing and only runs `CLEANUP <branch>` + `SYNC <integration>`. This is how an
+interrupted Flow A finishes cleanly on the next run.
 
 **Postconditions (success)**:
 - Topic branch deleted locally and on the remote.

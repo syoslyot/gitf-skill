@@ -9,6 +9,17 @@ Post-flow and prompt messages. Flows reference these by name. `blocked-*` and
   develop is ahead of main — run /gitf to release, or /gitf -v to release with a version tag.
 ```
 
+### flow-a-done-trunk
+```
+✓ <branch-name> landed on <integration>.
+  Single-trunk repo — this is already released. Run /gitf -v to cut a version tag.
+```
+
+### flow-a-done-trunk (version)
+```
+✓ <branch-name> landed on <integration> and released as v<version>.
+```
+
 ### flow-b-done (no version)
 ```
 ✓ <release-branch> landed on main and develop.
@@ -30,6 +41,19 @@ Post-flow and prompt messages. Flows reference these by name. `blocked-*` and
 ### nothing-to-do
 ```
 develop and main are already in sync — nothing to release.
+```
+
+### nothing-to-do-trunk
+```
+<integration> has nothing pending — no topic branch to land and no uncommitted work.
+  Start work on a feature/* or fix/* branch; /gitf lands it back here.
+```
+
+### unknown-model
+```
+⚠ Can't tell how this repo is organised — found no `develop` branch and no
+  identifiable trunk (`main`, `master`, or a remote HEAD).
+  Create the branch you integrate onto, then run /gitf again.
 ```
 
 ### warn-on-main

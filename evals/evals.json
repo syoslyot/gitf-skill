@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "I'm on branch feature/auth-jwt. I've committed the JWT authentication implementation. Run /gitf.",
-      "expected_output": "Surveys facts (gitf-survey.sh): topic branch, ahead_of_develop>0 → FLOW A. Pushes feature/auth-jwt, creates PR targeting develop, checks mergeStateStatus, merges with merge commit, syncs develop, runs CLEANUP. Reports which branch was merged and that develop is now up to date.",
+      "expected_output": "Surveys facts (gitf-survey.sh): topic branch, ahead_of_integration>0 → FLOW A. Pushes feature/auth-jwt, creates PR targeting develop, checks mergeStateStatus, merges with merge commit, syncs develop, runs CLEANUP. Reports which branch was merged and that develop is now up to date.",
       "files": []
     },
     {
@@ -22,7 +22,7 @@
     {
       "id": 4,
       "prompt": "I'm on feature/payment-stripe. I previously ran /gitf and it created PR #7 to develop, but the repo requires a reviewer before merge, so /gitf reported the PR blocked and stopped. A teammate approved and the PR was merged on GitHub. I run /gitf again.",
-      "expected_output": "No state file is consulted. Survey reports merged_into_develop=true with the branch still present (the prior run never cleaned up) → FLOW A cleanup-only path. The github provider re-locates the PR via gh pr list --head feature/payment-stripe --base develop --state all, sees state=MERGED, syncs develop, and runs CLEANUP (delete branch, remove any worktree). Reports the flow is complete and develop is up to date. Position is derived from the graph + gh, never from a stored entry.",
+      "expected_output": "No state file is consulted. Survey reports merged_into_integration=true with the branch still present (the prior run never cleaned up) → FLOW A cleanup-only path. The github provider re-locates the PR via gh pr list --head feature/payment-stripe --base develop --state all, sees state=MERGED, syncs develop, and runs CLEANUP (delete branch, remove any worktree). Reports the flow is complete and develop is up to date. Position is derived from the graph + gh, never from a stored entry.",
       "files": []
     },
     {
@@ -34,13 +34,13 @@
     {
       "id": 6,
       "prompt": "I have two topic branches with open work: feature/auth-jwt (PR #3 to develop, still open) and feature/search (PR #5 to develop). I'm currently checked out on feature/search and PR #5 was just merged on GitHub. I run /gitf.",
-      "expected_output": "Each branch's status is independent and derived from its own graph position — there is no shared state file. The survey of feature/search reports merged_into_develop=true with the branch still present → FLOW A cleanup-only. The github provider re-locates PR #5 via gh pr list --head feature/search, confirms MERGED, syncs develop, and runs CLEANUP on feature/search only. feature/auth-jwt is never touched: it is a different branch and would be handled on its own /gitf run when checked out. Reports feature/search done.",
+      "expected_output": "Each branch's status is independent and derived from its own graph position — there is no shared state file. The survey of feature/search reports merged_into_integration=true with the branch still present → FLOW A cleanup-only. The github provider re-locates PR #5 via gh pr list --head feature/search, confirms MERGED, syncs develop, and runs CLEANUP on feature/search only. feature/auth-jwt is never touched: it is a different branch and would be handled on its own /gitf run when checked out. Reports feature/search done.",
       "files": []
     },
     {
       "id": 7,
       "prompt": "I'm on a topic branch called issue-2087-login (no feature/ or fix/ prefix) with fresh commits ahead of develop. I run /gitf.",
-      "expected_output": "Routing is by topology, never by name prefix. The survey reports a topic branch (not develop/main/release/hotfix) with ahead_of_develop>0 → FLOW A. On the github provider the LAND step first probes for an existing PR (gh pr list --head issue-2087-login --base develop --state all) before creating one, then lands idempotently: pushes the branch, opens a PR to develop, checks mergeStateStatus, merges, syncs develop, CLEANUP. The unconventional branch name is treated exactly like any other topic branch.",
+      "expected_output": "Routing is by topology, never by name prefix. The survey reports a topic branch (not develop/main/release/hotfix) with ahead_of_integration>0 → FLOW A. On the github provider the LAND step first probes for an existing PR (gh pr list --head issue-2087-login --base develop --state all) before creating one, then lands idempotently: pushes the branch, opens a PR to develop, checks mergeStateStatus, merges, syncs develop, CLEANUP. The unconventional branch name is treated exactly like any other topic branch.",
       "files": []
     },
     {

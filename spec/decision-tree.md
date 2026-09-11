@@ -19,11 +19,25 @@ and never re-derives a fact itself:
 ```json
 {"platform":{"provider":"github|local","needs_login":bool,"has_remote":bool,"default_remote":"origin|null"},
  "branch":{"current":"<name>","head":"<sha>","dirty":bool},
- "topology":{"is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null",
-   "ahead_of_develop":int,"merged_into_develop":bool,"ahead_of_origin":int,"develop_ahead_of_main":int},
+ "topology":{"model":"gitflow|trunk","integration":"develop|main","is_integration":bool,
+   "is_develop":bool,"is_main":bool,"gitf_branch":"release|hotfix|null",
+   "ahead_of_integration":int,"merged_into_integration":bool,"ahead_of_origin":int,"develop_ahead_of_main":int},
  "worktrees":{"current_path":"<abs>","main_path":"<abs>","current_is_linked":bool,
    "develop_at":"<abs|null>","main_at":"<abs|null>"}}
 ```
+
+### Branch model (computed inside the survey)
+
+`model` is `gitflow` when a `develop` branch exists and `trunk` when it does not.
+`integration` names the branch topic work lands on — `develop` under gitflow,
+`main` under trunk — and **every routing decision and every flow measures against
+it, never against a literal `develop`**. `is_integration` is true when the current
+branch is that branch, so `develop` in a gitflow repo and `main` in a trunk repo
+take the same route.
+
+A trunk repo has no Flow B and no Flow C: with one trunk there is no develop→main
+promotion and no separate production line, so landing on `main` is the release and
+`-v` bumps and tags at the end of Flow A instead.
 
 ### Platform capability rules (computed inside the survey)
 
@@ -58,16 +72,33 @@ action and skip steps already done.
 ## Decision rules (routed from FACTS, evaluated in order)
 
 ```
-1. topology.is_main
-   → STOP: warn user not to work directly on main
+0. topology.model == "unknown"
+   → STOP: neither a `develop` nor an identifiable trunk was found. Never guess
+     a base branch.
 
-2. topology.is_develop
-   2a. branch.dirty OR topology.ahead_of_origin > 0
+1. topology.is_integration          (develop under gitflow, the trunk under trunk)
+   1a. branch.dirty
        → FLOW D (rescue) → FLOW A
-   2b. topology.develop_ahead_of_main > 0
+   1a'. model == "gitflow" AND topology.ahead_of_origin > 0
+       → FLOW D (rescue) → FLOW A
+   1a''. model == "trunk" AND topology.ahead_of_origin > 0
+       → PUBLISH <integration>, then fall through to 1b/1c.
+         Committing straight to a single trunk is the model, not a mistake;
+         Flow D's `reset --hard` must never touch it.
+   1b. topology.develop_ahead_of_main > 0        (gitflow only; 0 under trunk)
        → FLOW B (full release)
-   2c. else
+   1c. else
        → STOP: "develop and main are in sync, nothing to release"
+            (trunk → "main has nothing pending")
+
+2. topology.is_main
+   → STOP: warn user not to work directly on main
+   Reachable only under gitflow — in a trunk repo main is the integration
+   branch and was already matched by rule 1. Order matters here.
+
+(`gitf_branch` is set by the survey only under gitflow, so rules 3 and 4 are
+unreachable in a trunk repo — a branch named `release/*` there is an ordinary
+topic branch and falls through to rule 5.)
 
 3. topology.gitf_branch == "release"
    → FLOW B (continue an in-progress release)
@@ -75,24 +106,25 @@ action and skip steps already done.
 4. topology.gitf_branch == "hotfix"
    → FLOW C
 
-5. else — a TOPIC branch (ANY name that is not main/develop/release/hotfix)
-   5a. topology.ahead_of_develop > 0
-       → FLOW A (land on develop)
-   5b. topology.merged_into_develop AND (branch still exists OR worktree present)
+5. else — a TOPIC branch (ANY name that is not the integration branch/main/release/hotfix)
+   5a. topology.ahead_of_integration > 0
+       → FLOW A (land on topology.integration)
+   5b. topology.merged_into_integration AND (branch still exists OR worktree present)
        → FLOW A in CLEANUP-only mode (the land already happened; just clean up)
    5c. else
-       → STOP: "nothing to do"
+       → STOP: "nothing to do" (trunk → nothing-to-do-trunk; the default message
+         names develop, which a trunk repo does not have)
 ```
 
 **Topic branches are classified by topology, never by name prefix.** A branch
-called `spike-foo` with commits ahead of develop is treated exactly like
+called `spike-foo` with commits ahead of the integration branch is treated exactly like
 `feature/foo`. The `feature/*` / `fix/*` convention is a recommendation, not a
 routing requirement.
 
 ## Ambiguity resolution
 
-- On develop, if both 2a conditions hold (dirty working tree **and** unpushed
-  commits), Flow D handles both in one pass — the dirty changes and the rogue
+- **Under gitflow**, on `develop`, if both dirty working tree **and** unpushed
+  commits hold, Flow D handles both in one pass — the dirty changes and the rogue
   commits move onto the inferred branch together.
 - If a version bump type is ambiguous between patch and minor, default to minor.
   `BREAKING CHANGE` → major, but confirm with the user first.
@@ -109,6 +141,10 @@ routing requirement.
   for the hotfix). This guard is derived from `git branch` + `git log`, not from
   stored state, so it never blocks resuming a branch you already have checked
   out — only starting a brand-new flow.
+- **Under trunk**, the same state is split: the dirty changes go to Flow D
+  Case 1, and the unpushed commits are simply pushed (rule 1a″). Flow D Case 2
+  is gitflow-only — `reset --hard` must never touch a single trunk, where
+  committing directly is the model rather than a mistake.
 
 ## Preconditions
 

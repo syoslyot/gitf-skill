@@ -92,12 +92,18 @@ git push origin v<version>
 
 ## CLEANUP branch
 
+**Never delete the integration branch.** Before any deletion, stop if `<branch>`
+equals `topology.integration`, `main`, or `master`; report instead. No correct
+flow asks to delete a production branch, so reaching here with one means routing
+went wrong upstream.
+
 Order matches the spec: worktree remove → `branch -d` → remote delete → prune.
 
 ```bash
 # Remove the branch's worktree first if it has one (no --force: dirty => halt).
+# substr($0,10) not $2 — a worktree path may contain spaces.
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/<branch>" '
-  /^worktree /{p=$2} $0=="branch "b{print p}')
+  /^worktree /{p=substr($0,10)} $0=="branch "b{print p}')
 if [ -n "$wt" ]; then
   cd <main_path>
   git worktree remove "$wt" || { echo "GITF_HALT: worktree $wt not clean"; exit 0; }

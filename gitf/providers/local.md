@@ -24,13 +24,12 @@ Use `<remote>` = the detector's `default_remote`.
 
 **Idempotency probe.** If `git log <base-ref>..<head>` is empty, `<head>` is
 already merged — skip the merge, go to the next step. Use
-`topology.integration_ref`, not the bare name, whenever `<base>` is the
-integration branch: a fresh clone has no local `develop`, so `git log
-develop..HEAD` fails with `unknown revision`.
+`topology.develop_ref` / `main_ref`, not the bare name, when `<base>` is one of
+those: a fresh clone has no local `develop`, so `git log develop..HEAD` fails
+with `unknown revision`.
 
-The merge must happen in the worktree that holds `<base>`. `<base>` is whatever
-the flow passed — `develop`, `main`, or a trunk under another name — so resolve
-its worktree by branch, never by assuming the name:
+The merge must happen in the worktree that holds `<base>`. Resolve its worktree
+by branch:
 
 ```bash
 # substr($0,10) not $2 — a worktree path may contain spaces.
@@ -93,8 +92,8 @@ git push <remote> v<version>
 
 ## CLEANUP branch
 
-**Never delete the integration branch.** Before any deletion, stop if `<branch>`
-equals `topology.integration`, `main`, or `master`; report instead. No correct
+**Never delete a trunk.** Before any deletion, stop if `<branch>` equals
+`develop`, `main`, or `master`; report instead. No correct
 flow asks to delete a production branch, so reaching here with one means routing
 went wrong upstream.
 

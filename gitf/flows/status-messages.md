@@ -9,17 +9,6 @@ Post-flow and prompt messages. Flows reference these by name. `blocked-*` and
   develop is ahead of main — run /gitf to release, or /gitf -v to release with a version tag.
 ```
 
-### flow-a-done-trunk
-```
-✓ <branch-name> landed on <integration>.
-  Single-trunk repo — this is already released. Run /gitf -v to cut a version tag.
-```
-
-### flow-a-done-trunk (version)
-```
-✓ <branch-name> landed on <integration> and released as v<version>.
-```
-
 ### flow-b-done (no version)
 ```
 ✓ <release-branch> landed on main and develop.
@@ -43,17 +32,23 @@ Post-flow and prompt messages. Flows reference these by name. `blocked-*` and
 develop and main are already in sync — nothing to release.
 ```
 
-### nothing-to-do-trunk
+### develop-bootstrapped
 ```
-<integration> has nothing pending — no topic branch to land and no uncommitted work.
-  Start work on a feature/* or fix/* branch; /gitf lands it back here.
+✓ No develop branch found — created develop from <base> and published it.
+  Git Flow needs both trunks: topic branches land on develop, releases promote develop to main.
 ```
 
-### unknown-model
+### no-develop-main-unpublished
 ```
-⚠ Can't tell how this repo is organised — found no `develop` branch and no
-  identifiable trunk (`main`, `master`, or a remote HEAD).
-  Create the branch you integrate onto, then run /gitf again.
+⚠ No develop branch, and local main has <n> commit(s) not on <remote>/main.
+  Push main (or move those commits to a feature branch), then run /gitf again —
+  develop is created from the published main.
+```
+
+### no-main
+```
+⚠ No `main` branch found (locally or on the remote). gitf follows Git Flow with
+  `main` as the production branch — rename or create it, then run /gitf again.
 ```
 
 ### warn-on-main

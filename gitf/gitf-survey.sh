@@ -14,19 +14,19 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || true)
 jstr() { [ "$1" = "null" ] && printf 'null' || printf '"%s"' "$1"; }
 
 emit() {
-  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"model":%s,"integration":%s,"is_integration":%s,"is_develop":%s,"is_main":%s,"gitf_branch":%s,"integration_ref":%s,"ahead_of_integration":%s,"merged_into_integration":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
+  printf '{"platform":{"provider":"%s","needs_login":%s,"has_remote":%s,"default_remote":%s},"branch":{"current":%s,"head":%s,"dirty":%s},"topology":{"develop_ref":%s,"main_ref":%s,"is_develop":%s,"is_main":%s,"gitf_branch":%s,"ahead_of_develop":%s,"merged_into_develop":%s,"ahead_of_origin":%s,"develop_ahead_of_main":%s},"worktrees":{"current_path":%s,"main_path":%s,"current_is_linked":%s,"develop_at":%s,"main_at":%s}}\n' \
     "$PROVIDER" "$NEEDS_LOGIN" "$HAS_REMOTE" "$(jstr "$DEFAULT_REMOTE")" \
     "$(jstr "$CURRENT")" "$(jstr "$HEAD")" "$DIRTY" \
-    "$(jstr "$MODEL")" "$(jstr "$INTEGRATION")" "$IS_INTEGRATION" "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$(jstr "${INTEGRATION_REF:-null}")" "$AHEAD_OF_INTEGRATION" "$MERGED_INTO_INTEGRATION" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
+    "$(jstr "$DEVELOP_REF")" "$(jstr "$MAIN_REF")" "$IS_DEVELOP" "$IS_MAIN" "$(jstr "$GITF_BRANCH")" "$AHEAD_OF_DEVELOP" "$MERGED_INTO_DEVELOP" "$AHEAD_OF_ORIGIN" "$DEVELOP_AHEAD_OF_MAIN" \
     "$(jstr "$CURRENT_PATH")" "$(jstr "$MAIN_PATH")" "$CURRENT_IS_LINKED" "$(jstr "$DEVELOP_AT")" "$(jstr "$MAIN_AT")"
 }
 
 # Defaults (Tasks 2 & 3 fill branch/topology/worktrees).
 PROVIDER=local; NEEDS_LOGIN=false; HAS_REMOTE=false; DEFAULT_REMOTE=null
 CURRENT=null; HEAD=null; DIRTY=false
-MODEL=unknown; INTEGRATION=null; IS_INTEGRATION=false
+DEVELOP_REF=null; MAIN_REF=null
 IS_DEVELOP=false; IS_MAIN=false; GITF_BRANCH=null
-AHEAD_OF_INTEGRATION=0; MERGED_INTO_INTEGRATION=false; AHEAD_OF_ORIGIN=0; DEVELOP_AHEAD_OF_MAIN=0
+AHEAD_OF_DEVELOP=0; MERGED_INTO_DEVELOP=false; AHEAD_OF_ORIGIN=0; DEVELOP_AHEAD_OF_MAIN=0
 CURRENT_PATH=null; MAIN_PATH=null; CURRENT_IS_LINKED=false; DEVELOP_AT=null; MAIN_AT=null
 
 # Not a git repo: emit minimal facts.
@@ -56,14 +56,13 @@ CURRENT=$(git branch --show-current); [ -z "$CURRENT" ] && CURRENT=null
 HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo null)
 [ -n "$(git status --porcelain 2>/dev/null)" ] && DIRTY=true
 
-branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
 count() { git rev-list --count "$1" 2>/dev/null || echo 0; }
 
 # resolve_ref <name> -> a ref rev-list can use: the local branch when it exists,
 # otherwise a remote-tracking ref. A fresh `git clone` of a Git Flow repo checks
 # out only the default branch, so `develop` exists solely as
-# refs/remotes/origin/develop. A refs/heads-only test would call that repo
-# single-trunk and land feature work straight onto main.
+# refs/remotes/origin/develop. A refs/heads-only test would report develop as
+# missing and bootstrap a second, divergent develop from main.
 resolve_ref() {
   if git show-ref --verify --quiet "refs/heads/$1"; then printf '%s' "$1"; return 0; fi
   local r
@@ -72,50 +71,29 @@ resolve_ref() {
   return 1
 }
 
-# The integration branch is where topic work lands: `develop` under two-trunk Git
-# Flow, `main` when there is no develop. Everything below measures against it
-# rather than a hardcoded name.
-#
-# Trunk mode recognises `main` and nothing else. Accepting `master` or an
-# arbitrary default branch was tried and reverted: every other part of gitf
-# (is_main, develop_ahead_of_main, the flows' bump/tag steps, the status
-# messages) is written against the literal `main`, so a trunk under another name
-# produced facts that disagreed with the branch actually on disk — including one
-# path that deleted the production branch. A repo gitf cannot read is told so
-# via model=unknown; it is never guessed at.
-INTEGRATION_REF=""
-if INTEGRATION_REF=$(resolve_ref develop); then
-  MODEL=gitflow; INTEGRATION=develop
-elif INTEGRATION_REF=$(resolve_ref main); then
-  MODEL=trunk; INTEGRATION=main
-else
-  MODEL=unknown; INTEGRATION=null; INTEGRATION_REF=""
-fi
+# Git Flow needs both trunks. `develop_ref`/`main_ref` stay null when a trunk is
+# absent; the skill bootstraps a missing develop from main and halts on a missing
+# main. There is no single-trunk fallback: landing topic work on main when develop
+# is absent silently abandons Git Flow.
+DEVELOP_REF=$(resolve_ref develop) || DEVELOP_REF=null
+MAIN_REF=$(resolve_ref main) || MAIN_REF=null
 
 [ "$CURRENT" = develop ] && IS_DEVELOP=true
 [ "$CURRENT" = main ] && IS_MAIN=true
-[ "$INTEGRATION" != null ] && [ "$CURRENT" = "$INTEGRATION" ] && IS_INTEGRATION=true
+case "$CURRENT" in
+  release/*) GITF_BRANCH=release ;;
+  hotfix/*)  GITF_BRANCH=hotfix ;;
+esac
 
-# `release/*` and `hotfix/*` only mean something under gitflow: they exist to
-# move work between develop and main. A trunk repo has neither promotion nor a
-# separate production line, so such a branch is an ordinary topic branch —
-# routing it to Flow B/C would LAND onto a develop that does not exist.
-if [ "$MODEL" = gitflow ]; then
-  case "$CURRENT" in
-    release/*) GITF_BRANCH=release ;;
-    hotfix/*)  GITF_BRANCH=hotfix ;;
-  esac
-fi
-
-if [ -n "$INTEGRATION_REF" ] && [ "$IS_INTEGRATION" = false ] && [ "$HEAD" != null ]; then
-  AHEAD_OF_INTEGRATION=$(count "$INTEGRATION_REF..HEAD")
-  git merge-base --is-ancestor HEAD "$INTEGRATION_REF" 2>/dev/null && MERGED_INTO_INTEGRATION=true
+if [ "$DEVELOP_REF" != null ] && [ "$IS_DEVELOP" = false ] && [ "$HEAD" != null ]; then
+  AHEAD_OF_DEVELOP=$(count "$DEVELOP_REF..HEAD")
+  git merge-base --is-ancestor HEAD "$DEVELOP_REF" 2>/dev/null && MERGED_INTO_DEVELOP=true
 fi
 if [ "$HEAD" != null ] && git rev-parse --verify -q '@{upstream}' >/dev/null 2>&1; then
   AHEAD_OF_ORIGIN=$(count '@{upstream}..HEAD')
 fi
-if D_REF=$(resolve_ref develop) && M_REF=$(resolve_ref main); then
-  DEVELOP_AHEAD_OF_MAIN=$(count "$M_REF..$D_REF")
+if [ "$DEVELOP_REF" != null ] && [ "$MAIN_REF" != null ]; then
+  DEVELOP_AHEAD_OF_MAIN=$(count "$MAIN_REF..$DEVELOP_REF")
 fi
 
 # ===== worktrees =====

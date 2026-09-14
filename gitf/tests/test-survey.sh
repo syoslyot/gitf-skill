@@ -85,29 +85,26 @@ run_local() { ( cd "$1" && PATH="$CLEAN_BIN" bash "$SURVEY" ); }
 R="$(repo_flow)"
 ( cd "$R" && git checkout -q -b issue-42 && git commit -q --allow-empty -m work )
 J="$(run_local "$R")"
-check "topic current"            "$J" current issue-42
-check "topic model"              "$J" model gitflow
-check "topic integration"        "$J" integration develop
-check "topic integration_ref"    "$J" integration_ref develop
-check "topic is_integration"     "$J" is_integration false
-check "topic is_develop"         "$J" is_develop false
-check "topic gitf_branch"        "$J" gitf_branch null
-check "topic ahead_of_integration"   "$J" ahead_of_integration 1
-check "topic merged_into_integration" "$J" merged_into_integration false
+check "topic current"             "$J" current issue-42
+check "topic develop_ref"         "$J" develop_ref develop
+check "topic main_ref"            "$J" main_ref main
+check "topic is_develop"          "$J" is_develop false
+check "topic gitf_branch"         "$J" gitf_branch null
+check "topic ahead_of_develop"    "$J" ahead_of_develop 1
+check "topic merged_into_develop" "$J" merged_into_develop false
 
 # After --no-ff merge into develop, the same tip is an ancestor of develop.
 ( cd "$R" && git checkout -q develop && git merge -q --no-ff issue-42 -m "Merge issue-42" )
 ( cd "$R" && git checkout -q issue-42 )
 J="$(run_local "$R")"
-check "merged ahead_of_integration"    "$J" ahead_of_integration 0
-check "merged merged_into_integration" "$J" merged_into_integration true
+check "merged ahead_of_develop"    "$J" ahead_of_develop 0
+check "merged merged_into_develop" "$J" merged_into_develop true
 
 # On develop, ahead of main.
 R="$(repo_flow)"
 ( cd "$R" && git commit -q --allow-empty -m feature-on-develop )
 J="$(run_local "$R")"
-check "develop is_develop"          "$J" is_develop true
-check "develop is_integration"      "$J" is_integration true
+check "develop is_develop"            "$J" is_develop true
 check "develop develop_ahead_of_main" "$J" develop_ahead_of_main 1
 
 # On a release branch -> gitf_branch=release.
@@ -128,101 +125,59 @@ R="$(repo_flow)"
 J="$(run_local "$R")"
 check "dirty true" "$J" dirty true
 
-# --- trunk model (no develop branch) ---
-# repo_trunk -> repo with main only. main IS the integration branch.
-repo_trunk() {
-  local d; d="$(mktemp -d "$SANDBOX/trunk.XXXXXX")"
+# --- missing develop (the skill bootstraps it from main) ---
+# A main-only repo is not a different branching model: it is a Git Flow repo
+# that has not created develop yet. The survey must report the gap rather than
+# measure topic branches against main, which would land them on production.
+repo_main_only() {
+  local d; d="$(mktemp -d "$SANDBOX/mainonly.XXXXXX")"
   ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t
     git commit -q --allow-empty -m c0 )
   echo "$d"
 }
 
-# On main in a trunk repo: it is the integration branch, not a branch to warn about.
-R="$(repo_trunk)"
+R="$(repo_main_only)"
 J="$(run_local "$R")"
-check "trunk model"          "$J" model trunk
-check "trunk integration"    "$J" integration main
-check "trunk integration_ref" "$J" integration_ref main
-check "trunk is_integration" "$J" is_integration true
-check "trunk is_main"        "$J" is_main true
-check "trunk is_develop"     "$J" is_develop false
-check "trunk develop_at"     "$J" develop_at null
+check "no-develop develop_ref" "$J" develop_ref null
+check "no-develop main_ref"    "$J" main_ref main
+check "no-develop is_main"     "$J" is_main true
+check "no-develop develop_ahead_of_main" "$J" develop_ahead_of_main 0
 
-# Topic branch in a trunk repo measures against main, not a missing develop.
-# This is the regression the whole model exists for: before it, ahead_of_develop
-# was 0 here and every trunk repo routed to nothing-to-do.
-R="$(repo_trunk)"
+R="$(repo_main_only)"
 ( cd "$R" && git checkout -q -b feature/thing && git commit -q --allow-empty -m work )
 J="$(run_local "$R")"
-check "trunk topic model"             "$J" model trunk
-check "trunk topic is_integration"    "$J" is_integration false
-check "trunk topic ahead_of_integration" "$J" ahead_of_integration 1
-check "trunk topic merged_into_integration" "$J" merged_into_integration false
+check "no-develop topic ahead_of_develop"    "$J" ahead_of_develop 0
+check "no-develop topic merged_into_develop" "$J" merged_into_develop false
 
-# After landing on main, the same tip is an ancestor -> cleanup-only re-run.
-( cd "$R" && git checkout -q main && git merge -q --no-ff feature/thing -m "Merge feature/thing" )
-( cd "$R" && git checkout -q feature/thing )
+# After `git branch develop main` the same topic branch measures against develop.
+( cd "$R" && git branch develop main )
 J="$(run_local "$R")"
-check "trunk merged ahead_of_integration"    "$J" ahead_of_integration 0
-check "trunk merged merged_into_integration" "$J" merged_into_integration true
+check "bootstrapped develop_ref"      "$J" develop_ref develop
+check "bootstrapped ahead_of_develop" "$J" ahead_of_develop 1
 
-# A trunk repo has no release line: develop_ahead_of_main stays 0.
-check "trunk develop_ahead_of_main" "$J" develop_ahead_of_main 0
-
-# --- regressions from the trunk-model review ---
-
+# --- remote-tracking refs ---
 # A fresh clone of a Git Flow repo has develop only as refs/remotes/origin/develop.
-# A refs/heads-only check would call this trunk and land features onto main.
+# A refs/heads-only check would call develop missing and bootstrap a divergent one.
 SRC="$(repo_flow)"
 ( cd "$SRC" && git commit -q --allow-empty -m c1 && git checkout -q main )
 CLONE="$SANDBOX/clone.$$"
 git clone -q "$SRC" "$CLONE" 2>/dev/null
 J="$( cd "$CLONE" && PATH="$CLEAN_BIN" bash "$SURVEY" )"
-check "clone model"           "$J" model gitflow
-check "clone integration"     "$J" integration develop
-# No local develop in a fresh clone — the ref flows must use is the remote one.
-check "clone integration_ref" "$J" integration_ref origin/develop
+check "clone develop_ref"           "$J" develop_ref origin/develop
+check "clone main_ref"              "$J" main_ref main
+check "clone develop_ahead_of_main" "$J" develop_ahead_of_main 1
 
-# Trunk mode recognises `main` only. A repo trunked on `master` must report
-# unknown rather than a fabricated `main`: every other part of gitf is written
-# against the literal `main`, and one such path deleted the production branch.
-repo_master() {
-  local d; d="$(mktemp -d "$SANDBOX/master.XXXXXX")"
-  ( cd "$d" && git init -q -b master && git config user.email t@t && git config user.name t
-    git commit -q --allow-empty -m c0 )
-  echo "$d"
-}
-R="$(repo_master)"
+# --- missing main ---
+# gitf is written against the literal `main`. A master repo reports main_ref=null
+# and the skill halts — treating master as a topic branch would let CLEANUP
+# delete the production branch.
+R="$(mktemp -d "$SANDBOX/master.XXXXXX")"
+( cd "$R" && git init -q -b master && git config user.email t@t && git config user.name t
+  git commit -q --allow-empty -m c0 && git branch develop )
 J="$(run_local "$R")"
-check "master model"           "$J" model unknown
-check "master integration"     "$J" integration null
-check "master integration_ref" "$J" integration_ref null
-check "master is_integration"  "$J" is_integration false
-
-# release/* in a trunk repo is an ordinary topic branch — routing it to Flow B
-# would LAND onto a develop that does not exist.
-R="$(repo_trunk)"
-( cd "$R" && git checkout -q -b release/v1.0.0 )
-J="$(run_local "$R")"
-check "trunk release gitf_branch" "$J" gitf_branch null
-R="$(repo_trunk)"
-( cd "$R" && git checkout -q -b hotfix/urgent )
-J="$(run_local "$R")"
-check "trunk hotfix gitf_branch" "$J" gitf_branch null
-
-# gitflow still classifies them.
-R="$(repo_flow)"
-( cd "$R" && git checkout -q -b release/v9.9.9 )
-J="$(run_local "$R")"
-check "gitflow release gitf_branch" "$J" gitf_branch release
-
-# Neither develop nor a recognisable trunk -> unknown, never a guessed base.
-D="$(mktemp -d "$SANDBOX/odd.XXXXXX")"
-( cd "$D" && git init -q -b integration-line && git config user.email t@t && git config user.name t
-  git commit -q --allow-empty -m c0 )
-J="$(run_local "$D")"
-check "unknown model"       "$J" model unknown
-check "unknown integration" "$J" integration null
+check "master main_ref"    "$J" main_ref null
+check "master develop_ref" "$J" develop_ref develop
+check "master is_main"     "$J" is_main false
 
 # --- worktree facts ---
 # develop lives in the main worktree; a linked worktree holds a topic branch.

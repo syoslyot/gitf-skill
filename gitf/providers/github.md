@@ -92,8 +92,8 @@ git push origin v<version>
 
 ## CLEANUP branch
 
-**Never delete the integration branch.** Before any deletion, stop if `<branch>`
-equals `topology.integration`, `main`, or `master`; report instead. No correct
+**Never delete a trunk.** Before any deletion, stop if `<branch>` equals
+`develop`, `main`, or `master`; report instead. No correct
 flow asks to delete a production branch, so reaching here with one means routing
 went wrong upstream.
 

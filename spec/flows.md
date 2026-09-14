@@ -53,34 +53,32 @@ re-enters the gate from the top and re-runs every reviewer (idempotent).
 
 ---
 
-## Flow A — Topic branch → Integration branch
+## Step 0.7 — Develop bootstrap (not a flow)
 
-`<integration>` below is `topology.integration`: `develop` in a gitflow repo,
-`main` in a trunk repo.
+Runs before routing whenever the survey reports `develop_ref == null` and
+`main_ref != null`. It creates `develop` from the published `main` (fetch first;
+halt if local `main` has unpushed commits), publishes it, and re-surveys. Every
+flow below may therefore assume `develop` exists. See `spec/decision-tree.md`.
 
-**Trigger**: a topic branch (any name not the integration branch/main/release/
-hotfix) with `ahead_of_integration > 0`; or, in CLEANUP-only mode, a topic branch
-already `merged_into_integration` that still exists locally or as a worktree.
+---
+
+## Flow A — Topic branch → Develop
+
+**Trigger**: a topic branch (any name not main/develop/release/hotfix) with
+`ahead_of_develop > 0`; or, in CLEANUP-only mode, a topic branch already
+`merged_into_develop` that still exists locally or as a worktree.
 
 **Steps**:
-1. **[trunk + `-v` only]** code-review gate on the topic branch — a trunk repo
-   ships production code here, so the gate that guards `main` in Flow B applies.
-2. `PUBLISH <branch>` — `git push -u origin <branch>` (github), no-op without a remote.
-3. `LAND base=<integration> head=<branch>` — github opens a PR (Conventional
-   Commits title) and merges when `mergeStateStatus=CLEAN`, deleting the branch;
-   local does a `--no-ff` merge.
-4. `SYNC <integration>` — bring the local integration branch up to date.
-5. **[trunk + `-v` only]** bump the version file if one exists, commit it on
-   `main`, then `TAG <version>`. There is no back-merge: a trunk repo has nothing
-   to back-merge into.
+1. `PUBLISH <branch>` — `git push -u origin <branch>` (github), no-op without a remote.
+2. `LAND base=develop head=<branch>` — github opens a PR (Conventional Commits
+   title) and merges when `mergeStateStatus=CLEAN`, deleting the branch; local
+   does a `--no-ff` merge.
+3. `SYNC develop` — bring local develop up to date.
 
 **CLEANUP-only re-run**: if the survey reports the branch already merged into
-`<integration>` but the branch (or its worktree) still lingers, Flow A skips
-steps 1-3 and runs `CLEANUP <branch>`. Under `trunk` with `-v` it then runs
-`SYNC <integration>` and step 5 as well — the land happened but the tag may not
-have, and `SYNC` is required first so the bump commits onto the real tip and the
-tag lands on the merge commit. This is how an interrupted Flow A finishes cleanly
-on the next run.
+develop but the branch (or its worktree) still lingers, Flow A skips landing and
+only runs `CLEANUP <branch>` + `SYNC develop`. This is how an interrupted Flow A
+finishes cleanly on the next run.
 
 **Postconditions (success)**:
 - Topic branch deleted locally and on the remote.

@@ -67,19 +67,15 @@ The JSON has four blocks:
   `default_remote`. Capability is decided by *what `gh` can do*, not by the remote
   URL, so GitHub Enterprise works with no special handling.
 - `branch` — `current`, `head`, `dirty`.
-- `topology` — `model` (gitflow/trunk), `integration` (develop/main),
-  `is_integration`, `is_develop`, `is_main`, `gitf_branch` (release/hotfix/null),
-  `integration_ref` (the integration branch resolved to a usable ref — a fresh
-  clone has no local `develop`, so this is `origin/develop` there),
-  `ahead_of_integration`, `merged_into_integration`, `ahead_of_origin`,
+- `topology` — `develop_ref`, `main_ref` (each branch resolved to a usable ref —
+  a fresh clone has no local `develop`, so `develop_ref` is `origin/develop` there;
+  `null` when the branch exists nowhere), `is_develop`, `is_main`, `gitf_branch` (release/hotfix/null),
+  `ahead_of_develop`, `merged_into_develop`, `ahead_of_origin`,
   `develop_ahead_of_main`. **Routing keys off topology, not branch-name prefixes**
-  — a branch called `spike-foo` ahead of the integration branch routes exactly
-  like `feature/foo`. The `model`/`integration` pair is what lets a single-trunk
-  repo work: distance is measured against whichever branch actually integrates,
-  so a repo with no `develop` no longer reports zero distance from a branch that
-  does not exist. `model` is `unknown` when neither a `develop` nor a `main`
-  exists: gitf reports that rather than guessing a base, because every remaining
-  part of the skill is written against the literal name `main`.
+  — a branch called `spike-foo` ahead of develop routes exactly like
+  `feature/foo`. A `null` `develop_ref` never changes the model: the skill
+  bootstraps `develop` from `main` before routing, so there is no single-trunk
+  mode that lands topic work on production.
 - `worktrees` — `current_path`, `main_path`, `current_is_linked`, `develop_at`,
   `main_at`. Lets flows behave correctly when develop/main/release is checked out
   in a linked worktree.
